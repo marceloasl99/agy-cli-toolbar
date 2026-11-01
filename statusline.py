@@ -3,7 +3,7 @@ import json
 import datetime
 import os
 
-# Assegura suporte completo a UTF-8 no console do Windows
+# Ensure full UTF-8 support on Windows console
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
@@ -77,10 +77,10 @@ def make_bar(pct, length=18, low_good=True):
 
 def calculate_cost(model_name, in_tokens, out_tokens):
     """
-    Calcula estimativa de custo de API em USD com base na precificação padrão:
-    - Flash: ~$0.75 / 1M input e ~$3.75 / 1M output
-    - Pro: ~$3.50 / 1M input e ~$14.00 / 1M output
-    - Claude / 3p: ~$3.00 / 1M input e ~$15.00 / 1M output
+    Calculate estimated commercial API cost in USD based on standard rates:
+    - Flash: ~$0.75 / 1M input, ~$3.75 / 1M output
+    - Pro: ~$3.50 / 1M input, ~$14.00 / 1M output
+    - Claude / 3p: ~$3.00 / 1M input, ~$15.00 / 1M output
     """
     m = model_name.lower()
     if "pro" in m:
@@ -128,7 +128,7 @@ def main():
         data = json.loads(raw_input)
 
         session_id = data.get("session_id") or data.get("conversation_id", "")
-        short_id = session_id[:8] if session_id else "nova"
+        short_id = session_id[:8] if session_id else "new"
         title = data.get("title", "")
         email = data.get("email", "")
         plan_tier = data.get("plan_tier", "")
@@ -194,11 +194,11 @@ def main():
         if state == "IDLE":
             badge = f"{GREEN_BG} IDLE {RESET}"
         elif "THINK" in state:
-            badge = f"{YELLOW_BG} PENSANDO {RESET}"
+            badge = f"{YELLOW_BG} THINKING {RESET}"
         elif "TOOL" in state or "EXEC" in state:
-            badge = f"{YELLOW_BG} FERRAMENTA {RESET}"
+            badge = f"{YELLOW_BG} TOOL USE {RESET}"
         elif "REVIEW" in state:
-            badge = f"{CYAN_BG} REVISÃO {RESET}"
+            badge = f"{CYAN_BG} REVIEWING {RESET}"
         else:
             badge = f"{YELLOW_BG} {state} {RESET}"
 
@@ -217,13 +217,13 @@ def main():
 
         tokens_block = (
             f"{BOLD}{WHITE}Tokens:{RESET} [{token_bar}] {ctx_color}{used_pct:.1f}%{RESET} "
-            f"{GRAY}(Entrada:{RESET}{CYAN}{format_tokens(in_tokens)}{RESET} "
-            f"{GRAY}Saída:{RESET}{YELLOW}{format_tokens(out_tokens)}{RESET} "
+            f"{GRAY}(In:{RESET}{CYAN}{format_tokens(in_tokens)}{RESET} "
+            f"{GRAY}Out:{RESET}{YELLOW}{format_tokens(out_tokens)}{RESET} "
             f"{GRAY}Total:{RESET}{WHITE}{format_tokens(total_tokens)}{RESET}{GRAY}/{format_tokens(cw_size)}){RESET}"
         )
 
-        cost_block = f"{BOLD}{GREEN}Custo API: {cost_str}{RESET}"
-        time_block = f"{GRAY}Início:{WHITE}{start_time}{RESET} {GRAY}(+{elapsed_time}){RESET}"
+        cost_block = f"{BOLD}{GREEN}API Cost: {cost_str}{RESET}"
+        time_block = f"{GRAY}Start:{WHITE}{start_time}{RESET} {GRAY}(+{elapsed_time}){RESET}"
         line1_items = [badge, chat_code_block, model_block, tokens_block, cost_block, time_block]
 
         line2_items = []
@@ -232,33 +232,33 @@ def main():
             bar_5h = make_bar(used_h, length=10, low_good=True)
             h_color = GREEN if used_h < 70 else (YELLOW if used_h < 90 else RED)
             reset_txt = f" {GRAY}(reset {format_seconds(reset_h)}){RESET}" if reset_h > 0 else ""
-            line2_items.append(f"{BOLD}5 Horas:{RESET} [{bar_5h}] {h_color}{used_h:.1f}%{RESET} {GRAY}restam {rem_h:.1f}%{RESET}{reset_txt}")
+            line2_items.append(f"{BOLD}5 Hours:{RESET} [{bar_5h}] {h_color}{used_h:.1f}%{RESET} {GRAY}left {rem_h:.1f}%{RESET}{reset_txt}")
         else:
             bar_empty = make_bar(0.0, length=10, low_good=True)
-            line2_items.append(f"{BOLD}5 Horas:{RESET} [{bar_empty}] {GREEN}0.0%{RESET} {GRAY}restam 100%{RESET}")
+            line2_items.append(f"{BOLD}5 Hours:{RESET} [{bar_empty}] {GREEN}0.0%{RESET} {GRAY}left 100%{RESET}")
 
         if quota_weekly:
             used_w, rem_w, reset_w = quota_weekly
             bar_w = make_bar(used_w, length=10, low_good=True)
             w_color = GREEN if used_w < 70 else (YELLOW if used_w < 90 else RED)
-            line2_items.append(f"{BOLD}Semanal:{RESET} [{bar_w}] {w_color}{used_w:.1f}%{RESET} {GRAY}restam {rem_w:.1f}%{RESET}")
+            line2_items.append(f"{BOLD}Weekly:{RESET} [{bar_w}] {w_color}{used_w:.1f}%{RESET} {GRAY}left {rem_w:.1f}%{RESET}")
         else:
             bar_empty_w = make_bar(0.0, length=10, low_good=True)
-            line2_items.append(f"{BOLD}Semanal:{RESET} [{bar_empty_w}] {GREEN}0.0%{RESET} {GRAY}restam 100%{RESET}")
+            line2_items.append(f"{BOLD}Weekly:{RESET} [{bar_empty_w}] {GREEN}0.0%{RESET} {GRAY}left 100%{RESET}")
 
         if email:
             plan_str = f" ({plan_tier})" if plan_tier else ""
             line2_items.append(f"{CYAN}👤 {email}{plan_str}{RESET}")
         elif plan_tier:
-            line2_items.append(f"{GRAY}Plano:{WHITE}{plan_tier}{RESET}")
+            line2_items.append(f"{GRAY}Plan:{WHITE}{plan_tier}{RESET}")
 
         if running_subagents:
-            line2_items.append(f"{YELLOW_BG} Subagentes ({len(running_subagents)}): {','.join(running_subagents)} {RESET}")
+            line2_items.append(f"{YELLOW_BG} Subagents ({len(running_subagents)}): {','.join(running_subagents)} {RESET}")
         elif active_agent:
-            line2_items.append(f"{BLUE}Agente: {active_agent}{RESET}")
+            line2_items.append(f"{BLUE}Agent: {active_agent}{RESET}")
 
         if task_count:
-            line2_items.append(f"{BLUE}⚙️ Tarefas:{task_count}{RESET}")
+            line2_items.append(f"{BLUE}⚙️ Tasks:{task_count}{RESET}")
 
         if artifact_count:
             line2_items.append(f"{CYAN}📄 Docs:{artifact_count}{RESET}")

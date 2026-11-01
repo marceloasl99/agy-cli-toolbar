@@ -1,58 +1,57 @@
-# Antigravity CLI Toolbar (agy-cli-toolbar)
+# Antigravity CLI Toolbar (`agy-cli-toolbar`)
 
-Barra de status avançada de **2 linhas em alta resolução** (otimizada para Full HD) para o **Google Antigravity CLI (`agy`)**.
+An advanced, high-resolution **2-line status bar** (optimized for 1080p Full HD displays) for the **Google Antigravity CLI (`agy`)**.
 
-Exibe em tempo real o status de processamento, tokens (entrada/saída/total), janela de contexto com bargraph gráfico, estimativa de custo da API em dólares, cota de 5 horas e semanal com tempo de reset, subagentes ativos, tarefas em background, repositório Git e diretório atual.
+Real-time monitoring of agent lifecycle state, context window consumption with graphical bargraphs, prompt input/output/total token breakdown, estimated commercial API costs in USD, 5-hour rolling & weekly quotas with reset countdowns, running subagents, background tasks, Git branch status, and active project workspace directory.
 
 ---
 
-## 📸 Pré-visualização
+## 📸 Preview
 
 ```text
- IDLE  │  Chat: #23afa7c1  "Statusline Customizati" │ Gemini 3.8 Flash ⚡high [auto] │ Tokens: [██░░░░░░░░░░░░░░░░░░░░] 7.4% (Entrada:74.2k Saída:3.8k Total:78.0k/1.05M) │ Custo API: $0.0699 │ Início:00:31:22 (+3m)
-5 Horas: [██░░░░░░░░] 19.0% restam 81.0% (reset 3h06m) │ Semanal: [█░░░░░░░░░] 10.0% restam 90.0% │ 👤 user@example.com (Pro) │ Subagentes (1): research │ ⚙️ Tarefas:1 │ 📄 Docs:1 │ 📁 workspace │ git:main*
+ IDLE  │  Chat: #23afa7c1  "Statusline Customizati" │ Gemini 3.8 Flash ⚡high [auto] │ Tokens: [██░░░░░░░░░░░░░░░░░░░░] 7.4% (In:74.2k Out:3.8k Total:78.0k/1.05M) │ API Cost: $0.0699 │ Start:00:31:22 (+3m)
+5 Hours: [██░░░░░░░░] 19.0% left 81.0% (reset 3h06m) │ Weekly: [█░░░░░░░░░] 10.0% left 90.0% │ 👤 user@example.com (Pro) │ Subagents (1): research │ ⚙️ Tasks:1 │ 📄 Docs:1 │ 📁 workspace │ git:main*
 ```
 
 ---
 
-## 🚀 Recursos
+## 🚀 Key Features
 
-* **Badge de Estado**: ` IDLE `, ` PENSANDO `, ` FERRAMENTA `, ` REVISÃO ` em destaque com cores de fundo sólidas.
-* **Código do Chat**: Mostra o ID curto do chat atual (`#23afa7c1`) e o título da conversa.
-* **Modelo & Raciocínio**: Nome do modelo (`Gemini 3.8 Flash`), esforço de raciocínio (`⚡high`) e modo de ciclo (`[auto]`, `[plan]`).
-* **Bargraph de Tokens em Full HD**: Barra gráfica de alta resolução indicando o percentual de preenchimento da janela de 1M+ tokens.
-* **Detalhamento de Tokens**: Tokens de Entrada, Saída e Total acumulado.
-* **Estimativa de Custo API (USD)**: Calcula em tempo real o custo equivalente da chamada de API comercial (Input + Output/Reasoning).
-* **Cotas (5 Horas e Semanal)**: Barras visuais de consumo com contagem regressiva para o reset de cota (`reset 3h06m`).
-* **Sessão & Tempo**: Horário em que a sessão começou e tempo ativo decorrido.
-* **Subagentes & Tarefas**: Monitoramento de agentes paralelos rodando e tarefas assíncronas em segundo plano.
-* **Workspace & Git**: Pasta do projeto, branch atual e indicador de modificações (`*`).
+* **Lifecycle State Badges**: Distinct solid badge colors for ` IDLE `, ` THINKING `, ` TOOL USE `, and ` REVIEWING `.
+* **Conversation Identity**: Displays short Chat ID (`#23afa7c1`) and title for easy session resumption with `agy --conversation <ID>`.
+* **Model & Reasoning**: Active model name (`Gemini 3.8 Flash`), reasoning effort tier (`⚡high`), and cycle mode (`[auto]`, `[plan]` via `Shift+Tab`).
+* **Full HD Token Bargraph**: High-resolution 22-block ASCII progress bar rendering context window saturation (1M+ capacity) with dynamic ANSI color transitions (green <50%, yellow <80%, red >80%).
+* **Token Metrics Breakdown**: Detailed breakdown of Input tokens, Output/Thinking tokens, and Total accumulated tokens.
+* **Live Commercial API Cost Estimation**: Calculates real-time cost in USD based on standard Google Cloud / Vertex AI pricing per million tokens.
+* **Quota Pools & Reset Timers**: Visual bargraph gauges for **5-hour rolling pool** and **Weekly pool**, along with exact time countdowns to quota reset (`reset 3h06m`).
+* **Active Subagents & Tasks**: Real-time counter of parallel subagents running and background asynchronous jobs.
+* **Workspace & VCS**: Active directory folder name, Git branch, and dirty status indicator (`*`).
 
 ---
 
-## 🛠️ Como Instalar e Configurar
+## 🛠️ Installation & Setup
 
-### 1. Salvar o Script
+### 1. Download or Copy the Script
 
-Copie o arquivo `statusline.py` para a pasta `.antigravity-custom` na sua pasta de usuário:
+Save `statusline.py` into your user home custom folder:
 
-* **Windows**: `C:\Users\<SEU_USUARIO>\.antigravity-custom\statusline.py`
-* **Linux/macOS**: `~/.antigravity-custom/statusline.py`
+* **Windows**: `C:\Users\<YOUR_USER>\.antigravity-custom\statusline.py`
+* **Linux / macOS**: `~/.antigravity-custom/statusline.py`
 
-### 2. Configurar o `settings.json` do Antigravity CLI
+### 2. Configure `settings.json`
 
-Abra o arquivo de configuração do CLI:
-* **Windows**: `C:\Users\<SEU_USUARIO>\.gemini\antigravity-cli\settings.json`
-* **Linux/macOS**: `~/.gemini/antigravity-cli/settings.json`
+Open your Antigravity CLI configuration file:
+* **Windows**: `C:\Users\<YOUR_USER>\.gemini\antigravity-cli\settings.json`
+* **Linux / macOS**: `~/.gemini/antigravity-cli/settings.json`
 
-Adicione o bloco `"statusLine"`:
+Add the `"statusLine"` block:
 
-#### No Windows:
+#### Windows:
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "python C:\\Users\\<SEU_USUARIO>\\.antigravity-custom\\statusline.py",
+    "command": "python C:\\Users\\<YOUR_USER>\\.antigravity-custom\\statusline.py",
     "padding": 0,
     "stack_with_default": false,
     "enabled": true
@@ -60,7 +59,7 @@ Adicione o bloco `"statusLine"`:
 }
 ```
 
-#### No Linux / macOS:
+#### Linux / macOS:
 ```json
 {
   "statusLine": {
@@ -73,21 +72,21 @@ Adicione o bloco `"statusLine"`:
 }
 ```
 
-> **Dicas:**
-> * `"padding": 0`: remove linhas em branco extras acima da barra.
-> * `"stack_with_default": false`: substitui a barra padrão para manter apenas as 2 linhas limpas.
+> **Important options:**
+> * `"padding": 0`: Eliminates blank/black spacing lines above the status bar.
+> * `"stack_with_default": false`: Replaces the default statusline to maintain a clean 2-line layout.
 
-### 3. Ativação Imediata (Sem reiniciar)
+### 3. Immediate Activation (Without Restarting)
 
-Se já estiver com o Antigravity CLI aberto no terminal, ative na mesma hora rodando:
+If you already have an Antigravity CLI terminal open, activate it on the fly by typing:
 
 ```bash
-/statusline python C:\Users\<SEU_USUARIO>\.antigravity-custom\statusline.py
+/statusline python C:\Users\<YOUR_USER>\.antigravity-custom\statusline.py
 ```
-*(No Linux/macOS use `python3 ~/.antigravity-custom/statusline.py`)*
+*(On Linux/macOS use `python3 ~/.antigravity-custom/statusline.py`)*
 
 ---
 
-## 📄 Licença
+## 📄 License
 
-MIT License. Sinta-se livre para customizar e expandir!
+MIT License. Feel free to modify and adapt to your workflow!
