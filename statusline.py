@@ -105,7 +105,6 @@ def get_session_info(session_id, max_cached=50):
     return now.strftime("%H:%M:%S"), "0m", 0
 
 def get_theme_colors(theme_name):
-    # Check NO_COLOR env spec
     if os.environ.get("NO_COLOR"):
         return {k: "" for k in [
             "CYAN_BG", "GREEN_BG", "YELLOW_BG", "MAGENTA_BG", "BOLD", "RESET",
@@ -186,12 +185,6 @@ def make_bar(pct, length, colors, low_good=True):
     return f"{color}{bar}{colors['RESET']}"
 
 def calculate_cost(model_name, in_tokens, out_tokens, cached_tokens=0):
-    """
-    Calculate estimated commercial API cost in USD:
-    - Flash: ~$0.75 / 1M input, ~$3.75 / 1M output, ~$0.18 / 1M cache read
-    - Pro: ~$3.50 / 1M input, ~$14.00 / 1M output, ~$0.87 / 1M cache read
-    - Claude / 3p: ~$3.00 / 1M input, ~$15.00 / 1M output, ~$0.75 / 1M cache read
-    """
     m = model_name.lower()
     if "pro" in m:
         rate_in = 3.50 / 1_000_000
@@ -218,10 +211,11 @@ def parse_quota(quota_dict, rate_limits_dict, keys):
             if isinstance(q, dict):
                 rem_fraction = q.get("remaining_fraction")
                 reset_sec = q.get("reset_in_seconds", 0)
+                reset_time = q.get("reset_time", "")
                 if rem_fraction is not None:
                     rem_pct = rem_fraction * 100.0
                     used_pct = 100.0 - rem_pct
-                    return (used_pct, rem_pct, reset_sec)
+                    return (used_pct, rem_pct, reset_sec, reset_time)
 
     for k in keys:
         if k in rate_limits_dict:
@@ -229,8 +223,9 @@ def parse_quota(quota_dict, rate_limits_dict, keys):
             if isinstance(rl, dict):
                 used_pct = rl.get("used_percentage", 0.0)
                 reset_sec = rl.get("reset_in_seconds", 0)
+                reset_time = rl.get("reset_time", "")
                 rem_pct = 100.0 - used_pct
-                return (used_pct, rem_pct, reset_sec)
+                return (used_pct, rem_pct, reset_sec, reset_time)
 
     return None
 
@@ -245,26 +240,25 @@ def main():
         conf = load_config()
         colors = get_theme_colors(conf.get("theme", "default"))
 
-        # Terminal width resolution (CLI payload or fallback to OS terminal size)
+        # Terminal width resolution
         term_width = data.get("terminal_width")
         if not term_width or term_width <= 0:
             try:
                 term_width = os.get_terminal_size().columns
             except Exception:
-                term_width = 120
+                term_width = 140
 
-        # Determine layout mode
-        # "wide" (Full HD, width >= 140), "medium" (100 <= width < 140), "narrow" (< 100)
         is_wide = term_width >= 140
         is_medium = 100 <= term_width < 140
         is_narrow = term_width < 100
 
-        # Session & ID
+        # Session & Identifiers
         session_id = data.get("session_id") or data.get("conversation_id", "")
         short_id = session_id[:8] if session_id else "new"
         title = data.get("title", "")
         email = data.get("email", "")
         plan_tier = data.get("plan_tier", "")
+        version = data.get("version", "")
 
         state = str(data.get("agent_state", "idle")).upper()
         start_time, elapsed_time, elapsed_sec = get_session_info(session_id, conf.get("max_cached_sessions", 50))
@@ -286,6 +280,7 @@ def main():
         cached_tokens = cw.get("cached_tokens", 0)
         total_tokens = in_tokens + out_tokens
         cw_size = cw.get("context_window_size", 1_048_576)
+        exceeds_200k = data.get("exceeds_200k_tokens", False)
 
         # Tokens/s Speed Calculation
         tps_str = ""
@@ -297,7 +292,7 @@ def main():
         estimated_cost = calculate_cost(model_name, in_tokens, out_tokens, cached_tokens)
         cost_str = f"${estimated_cost:.4f}" if estimated_cost < 1.0 else f"${estimated_cost:.2f}"
 
-        # Quotas
+        # Quotas (5h and Weekly)
         quota = data.get("quota") or {}
         rate_limits = data.get("rate_limits") or {}
         quota_5h = parse_quota(quota, rate_limits, ["gemini-5h", "3p-5h", "5h", "five_hour"])
@@ -314,6 +309,7 @@ def main():
 
         # Workspace & VCS
         vcs = data.get("vcs") or {}
+        vcs_type = vcs.get("type", "git")
         branch = vcs.get("branch", "")
         dirty = vcs.get("dirty", False)
 
@@ -321,10 +317,10 @@ def main():
         cur_dir = workspace.get("current_dir") or data.get("cwd", "")
         dir_name = os.path.basename(cur_dir) if cur_dir else ""
 
-        # Badges
         RESET = colors["RESET"]
         BOLD = colors["BOLD"]
 
+        # Badge de Estado
         if conf.get("theme") == "plain":
             state_badge = f"[{state}]"
         else:
@@ -342,7 +338,7 @@ def main():
         # ------------------- LINE 1 -------------------
         line1_items = [state_badge]
 
-        # Chat ID & Title (omitted on narrow terminal)
+        # Chat ID & Title
         if not is_narrow:
             chat_code_block = f"{colors['MAGENTA_BG']} #{short_id} {RESET}" if conf.get("theme") != "plain" else f"#{short_id}"
             if title and is_wide:
@@ -357,18 +353,19 @@ def main():
             model_block += f" {colors['MAGENTA']}{mode_str}{RESET}"
         line1_items.append(model_block)
 
-        # Token Bargraph (length adapted to screen width)
-        bar_len = 22 if is_wide else (12 if is_medium else 8)
-        token_bar = make_bar(used_pct, length=bar_len, colors=colors, low_good=True)
+        # Token Bargraph (Top Line: 24 blocks on wide screens)
+        bar_len_l1 = 24 if is_wide else (12 if is_medium else 8)
+        token_bar = make_bar(used_pct, length=bar_len_l1, colors=colors, low_good=True)
         ctx_color = colors["GREEN"] if used_pct < 50 else (colors["YELLOW"] if used_pct < 80 else colors["RED"])
 
         if is_wide:
             cache_info = f" {colors['CYAN']}⚡cache:{format_tokens(cached_tokens)}{RESET}" if cached_tokens > 0 else ""
+            warn_200k = f" {colors['RED']}[>200k]{RESET}" if exceeds_200k else ""
             tokens_block = (
                 f"{BOLD}{colors['WHITE']}Tokens:{RESET} [{token_bar}] {ctx_color}{used_pct:.1f}%{RESET} "
                 f"{colors['GRAY']}(In:{RESET}{colors['CYAN']}{format_tokens(in_tokens)}{RESET} "
                 f"{colors['GRAY']}Out:{RESET}{colors['YELLOW']}{format_tokens(out_tokens)}{RESET}{cache_info} "
-                f"{colors['GRAY']}Total:{RESET}{colors['WHITE']}{format_tokens(total_tokens)}{RESET}{colors['GRAY']}/{format_tokens(cw_size)}){RESET}"
+                f"{colors['GRAY']}Total:{RESET}{colors['WHITE']}{format_tokens(total_tokens)}{RESET}{colors['GRAY']}/{format_tokens(cw_size)}){RESET}{warn_200k}"
             )
         else:
             tokens_block = f"Tokens: [{token_bar}] {ctx_color}{used_pct:.1f}%{RESET} ({format_tokens(total_tokens)})"
@@ -378,46 +375,46 @@ def main():
         if conf.get("show_cost", True) and not is_narrow:
             line1_items.append(f"{BOLD}{colors['GREEN']}Cost: {cost_str}{RESET}")
 
-        # Speed (t/s)
+        # Generation Speed (t/s)
         if tps_str and is_wide:
             line1_items.append(f"{colors['CYAN']}⚡{tps_str}{RESET}")
 
-        # Time
+        # Start time and elapsed
         if not is_narrow:
             time_block = f"{colors['GRAY']}Start:{colors['WHITE']}{start_time}{RESET} {colors['GRAY']}(+{elapsed_time}){RESET}"
             line1_items.append(time_block)
 
-        # ------------------- LINE 2 -------------------
+        # ------------------- LINE 2 (DUPLICATED BARGRAPH SIZE: 20 BLOCKS EACH) -------------------
         line2_items = []
-        quota_bar_len = 10 if is_wide else 6
+        # Double the bargraph size from 10 to 20 blocks on wide monitors
+        quota_bar_len = 20 if is_wide else (10 if is_medium else 6)
 
-        # Quota 5h
+        # Quota 5h (20 blocks wide)
         if conf.get("show_quota_5h", True):
             if quota_5h:
-                used_h, rem_h, reset_h = quota_5h
+                used_h, rem_h, reset_h, _ = quota_5h
                 bar_5h = make_bar(used_h, length=quota_bar_len, colors=colors, low_good=True)
                 h_color = colors["GREEN"] if used_h < 70 else (colors["YELLOW"] if used_h < 90 else colors["RED"])
                 reset_txt = f" {colors['GRAY']}({format_seconds(reset_h)}){RESET}" if reset_h > 0 else ""
-                
-                # Pace warning if quota is consuming too fast
                 pace_warn = f" {colors['RED']}[HIGH PACE]{RESET}" if used_h > 75 and reset_h > 7200 else ""
                 line2_items.append(f"{BOLD}5h:{RESET} [{bar_5h}] {h_color}{used_h:.0f}%{RESET}{reset_txt}{pace_warn}")
             else:
                 bar_empty = make_bar(0.0, length=quota_bar_len, colors=colors, low_good=True)
                 line2_items.append(f"{BOLD}5h:{RESET} [{bar_empty}] {colors['GREEN']}0%{RESET}")
 
-        # Quota Weekly
+        # Quota Weekly (20 blocks wide)
         if conf.get("show_quota_weekly", True) and not is_narrow:
             if quota_weekly:
-                used_w, rem_w, reset_w = quota_weekly
+                used_w, rem_w, reset_w, _ = quota_weekly
                 bar_w = make_bar(used_w, length=quota_bar_len, colors=colors, low_good=True)
                 w_color = colors["GREEN"] if used_w < 70 else (colors["YELLOW"] if used_w < 90 else colors["RED"])
-                line2_items.append(f"{BOLD}7d:{RESET} [{bar_w}] {w_color}{used_w:.0f}%{RESET}")
+                reset_w_txt = f" {colors['GRAY']}({format_seconds(reset_w)}){RESET}" if reset_w > 0 and is_wide else ""
+                line2_items.append(f"{BOLD}7d:{RESET} [{bar_w}] {w_color}{used_w:.0f}%{RESET}{reset_w_txt}")
             else:
                 bar_empty_w = make_bar(0.0, length=quota_bar_len, colors=colors, low_good=True)
                 line2_items.append(f"{BOLD}7d:{RESET} [{bar_empty_w}] {colors['GREEN']}0%{RESET}")
 
-        # Account / Email
+        # Account / Email & Plan
         if conf.get("show_email", True) and email and not is_narrow:
             plan_str = f" ({plan_tier})" if plan_tier else ""
             line2_items.append(f"{colors['CYAN']}👤 {email}{plan_str}{RESET}")
@@ -447,10 +444,15 @@ def main():
         if conf.get("show_workspace", True) and dir_name and is_wide:
             line2_items.append(f"{colors['WHITE']}📁 {dir_name}{RESET}")
 
-        # Git VCS
+        # VCS / Git
         if conf.get("show_git", True) and branch:
             dirty_flag = f"{colors['RED']}*{RESET}" if dirty else ""
-            line2_items.append(f"{colors['MAGENTA']}git:{branch}{dirty_flag}{RESET}")
+            vcs_tag = vcs_type if vcs_type != "git" else "git"
+            line2_items.append(f"{colors['MAGENTA']}{vcs_tag}:{branch}{dirty_flag}{RESET}")
+
+        # CLI Version
+        if version and is_wide:
+            line2_items.append(f"{colors['GRAY']}v{version}{RESET}")
 
         # Delimiter
         sep = f" {colors['GRAY']}│{RESET} "
