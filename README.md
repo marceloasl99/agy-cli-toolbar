@@ -2,76 +2,113 @@
 
 An advanced, adaptive **2-line status bar** (responsive across Full HD, medium, and narrow split panes) for the **Google Antigravity CLI (`agy`)**.
 
-Built in **Pure Python (Zero dependencies)** with double-sized 20-block quota bargraphs, terminal auto-resizing, token speed (tokens/sec), prompt caching discounts, dynamic API cost estimation, rolling 5-hour & weekly quota countdowns, subagents, background jobs, themes, and automated one-line installation.
+Built in **Pure Python (Zero runtime dependencies)** with double-sized 20-block quota gauges, terminal auto-resizing, token speed (tokens/sec), prompt caching discounts, dynamic API cost estimation in USD, rolling 5-hour & weekly quota countdowns, subagents, background jobs, themes, and automated 1-click installation.
 
 ---
 
-## 📸 Preview
+## 📸 Real Terminal Preview
 
-### Full HD / Wide Terminals (>= 140 columns)
-```text
- IDLE  │  #23afa7c1  "Statusline Customi" │ Gemini 3.8 Flash ⚡high [auto] │ Tokens: [██░░░░░░░░░░░░░░░░░░░░░░] 8.1% (In:81.2k Out:4.2k ⚡cache:30.0k Total:85.4k/1.05M) │ Cost: $0.0598 │ ⚡90.3t/s │ Start:00:31:22 (+15m)
-5h: [████░░░░░░░░░░░░░░░░] 21% (2h50m) │ 7d: [██░░░░░░░░░░░░░░░░░░] 12% (106h40m) │ 👤 user@example.com (Pro) │ Subagents (1): research │ ⚙️ Tasks:1 │ 📄 Docs:1 │ 📁 workspace │ git:main* │ v1.4.2
-```
+![Antigravity CLI Toolbar Real Terminal Capture](assets/real_terminal_preview.png)
 
-### Medium / Split Screen Terminals (100 - 139 columns)
-```text
- IDLE  │ #23afa7c1 │ Gemini 3.8 Flash ⚡high [auto] │ Tokens: [███░░░░░░░░░] 21.4% (128.5k) │ Cost: $0.1245 │ Start:00:31:22 (+3m)
-5h: [████░░░░░░] 38% (2h42m) │ 7d: [██░░░░░░░░] 18% │ 👤 user@example.com (Pro) │ ⚙️ Tasks:1 │ git:main*
-```
-
-### Narrow / Side Panel Terminals (< 100 columns)
-```text
- TOOL USE  │ Gemini 3.8 Flash │ Tokens: [██░░░░░░] 25.0% (25.0k)
-5h: [███░░░] 50% (1h00m) │ git:main
-```
+> *Real terminal capture of Google Antigravity CLI v1.4.12 running on Windows with `agy-cli-toolbar` active.*
 
 ---
 
-## 🚀 Key Features
+## 🌟 Why Use `agy-cli-toolbar`?
 
-* **Double-Sized Quota Bargraphs**: Line 2 features extra-wide **20-block graphical gauges** for both 5-hour rolling pool and 7-day weekly quotas.
-* **Terminal Auto-Responsiveness**: Dynamically measures terminal width (`terminal_width` or `os.get_terminal_size()`) and scales bargraph lengths and widgets to fit without wrapping.
-* **Context Caching & Pricing**: Calculates cost in USD accounting for cached prompt tokens (applying up to 80-90% discount on cache hits).
-* **Generation Speed (`t/s`)**: Live tokens/second throughput calculation based on session time.
-* **Weekly Reset Countdown**: Displays exact remaining time countdown for weekly quota reset alongside the 5-hour counter.
-* **High-Pace Quota Alert**: Flags `[HIGH PACE]` if you are burning through the 5-hour quota too quickly before the reset window.
-* **Pure Python & Lightning Fast**: Startup latency of **~50ms**, zero third-party packages, zero Node.js/npm required.
-* **Theme Support**: Includes `default`, `tokyo_night`, `catppuccin`, and `plain` (for `NO_COLOR` / light terminals).
-* **Configurable via `config.json`**: Toggle widgets on/off without touching Python code.
-* **Automatic Session Pruning**: Keeps only the most recent 50 sessions in memory to prevent file bloat.
+By default, the Antigravity CLI provides minimal status feedback. Alternative statusbars often require Node.js runtimes, wrap awkwardly on narrower screens, or lack critical financial and rate-limit insights.
+
+`agy-cli-toolbar` is:
+* **Zero Dependencies**: Pure Python 3.8+ using only the standard library.
+* **Blazing Fast**: Startup latency of **~50ms**, never blocking prompt responsiveness.
+* **Double-Width Bargraph Gauges**: 24 blocks for context saturation and 20 blocks for 5-hour and 7-day quota pools.
+* **Live Commercial API Cost (USD)**: Automatically calculates what your current session would cost under commercial Google Cloud / Vertex AI pricing, including context cache discounts.
+* **Fully Responsive**: Dynamically scales and trims segments if you split your terminal or open side panels (<100 columns).
 
 ---
 
-## 🛠️ Automated 1-Click Installation
+## 📊 Live Metrics Breakdown
 
-### Windows (PowerShell)
-Clone or download and run:
-```powershell
-.\install.ps1
-```
-*Or via one-liner:*
+### Top Line: Session, Model & Tokens
+* **Lifecycle Badge**: High-contrast indicator (`IDLE`, `THINKING`, `TOOL USE`, `REVIEWING`).
+* **Chat ID & Title**: Short conversation hash (`#new`, `#23afa7c1`) for fast resumption (`agy --conversation <ID>`).
+* **Model & Reasoning**: Displays active model (e.g., `Gemini 3.8 Flash`), thinking effort (`⚡medium`/`⚡high`), and cycle mode (`[auto]`/`[plan]`).
+* **Token Saturation**: Graphical bargraph with input/output token breakdown and total capacity (e.g., `Total: 270.4k / 1.05M`).
+* **API Cost (USD)**: Real-time estimated billable amount based on standard token pricing.
+* **Generation Speed (`t/s`)**: Live throughput counter based on session elapsed time.
+* **Elapsed Time**: Session start timestamp and active duration (`+12h51m`).
+
+### Bottom Line: Quota Pools, Account & Workspace
+* **5-Hour Rolling Limit**: Double-length (20-block) progress bar, percentage used, and exact reset countdown (`reset 3h11m`).
+* **7-Day Weekly Limit**: Double-length (20-block) progress bar with weekly reset timer (`143h14m`).
+* **Account Info**: User email and subscription tier (`Google AI Pro` / `Enterprise`).
+* **Parallel Subagents**: Real-time counter when autonomous subagents are active.
+* **Artifacts & Tasks**: Counter of background tasks (`⚙️ Tasks`) and conversation documents (`📄 Docs`).
+* **Workspace & Git**: Project folder name, active branch, and dirty status indicator (`*`).
+* **CLI Version**: Version string of the Antigravity CLI binary (`v1.4.12`).
+
+---
+
+## 🛠️ Quick Installation
+
+### Option 1: Automated 1-Click Installer (Recommended)
+
+#### Windows (PowerShell):
 ```powershell
 irm https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/install.ps1 | iex
 ```
 
-### Linux / macOS (Bash)
-```bash
-chmod +x install.sh && ./install.sh
-```
-*Or via one-liner:*
+#### Linux / macOS (Bash):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/install.sh | bash
 ```
 
 ---
 
-## ⚙️ Configuration (`config.json`)
+### Option 2: Manual Installation
 
-The installer places a configuration file at `~/.antigravity-custom/config.json`:
+1. Create directory `~/.antigravity-custom` and copy `statusline.py` into it.
+2. Open your Antigravity CLI configuration file:
+   * **Windows**: `C:\Users\<YOUR_USER>\.gemini\antigravity-cli\settings.json`
+   * **Linux/macOS**: `~/.gemini/antigravity-cli/settings.json`
+3. Add the `statusLine` configuration block:
 
 ```json
 {
+  "statusLine": {
+    "type": "command",
+    "command": "python C:\\Users\\<YOUR_USER>\\.antigravity-custom\\statusline.py",
+    "padding": 0,
+    "stack_with_default": false,
+    "enabled": true
+  }
+}
+```
+
+> **Important flags:**
+> * `"padding": 0`: Eliminates blank/black spacing rows above the status line.
+> * `"stack_with_default": false`: Replaces the default CLI footer for a clean 2-line layout.
+
+---
+
+## 🎮 Immediate Testing (No Restart Needed)
+
+If you already have a terminal session open with Antigravity CLI, toggle the statusline on the fly:
+
+```bash
+/statusline python C:\Users\<YOUR_USER>\.antigravity-custom\statusline.py
+```
+
+---
+
+## ⚙️ Customization (`config.json`)
+
+Customize which widgets appear in `~/.antigravity-custom/config.json`:
+
+```json
+{
+  "theme": "default",
+  "nerd_fonts": false,
   "show_cost": true,
   "show_tokens_per_sec": true,
   "show_quota_5h": true,
@@ -81,24 +118,21 @@ The installer places a configuration file at `~/.antigravity-custom/config.json`
   "show_artifacts": true,
   "show_git": true,
   "show_workspace": true,
-  "show_email": true,
-  "theme": "default",
-  "nerd_fonts": false,
-  "max_cached_sessions": 50
+  "show_email": true
 }
 ```
 
-Available themes:
+Available color themes:
 * `"default"`: High-contrast modern ANSI colors.
 * `"tokyo_night"`: 24-bit TrueColor Tokyo Night palette.
 * `"catppuccin"`: 24-bit TrueColor Catppuccin Mocha palette.
-* `"plain"`: Clean text without background fills.
+* `"plain"`: Clean text mode without background fills (supports `NO_COLOR`).
 
 ---
 
-## 🧪 Running the Test Suite
+## 🧪 Automated Tests
 
-We provide a test suite with 4 automated test cases covering wide, medium, and narrow responsive modes, empty payloads, and quota alerts:
+Run the built-in test suite verifying responsive scaling across resolutions:
 
 ```bash
 python tests/test_statusline.py
@@ -108,4 +142,4 @@ python tests/test_statusline.py
 
 ## 📄 License
 
-MIT License. Free for personal and commercial use.
+MIT License. Free for personal and commercial usage.
