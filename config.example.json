@@ -1,0 +1,15 @@
+{
+  "show_cost": true,
+  "show_tokens_per_sec": true,
+  "show_quota_5h": true,
+  "show_quota_weekly": true,
+  "show_subagents": true,
+  "show_tasks": true,
+  "show_artifacts": true,
+  "show_git": true,
+  "show_workspace": true,
+  "show_email": true,
+  "theme": "default",
+  "nerd_fonts": false,
+  "max_cached_sessions": 50
+}
