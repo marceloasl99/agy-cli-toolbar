@@ -1,0 +1,4 @@
+.session_time.json
+__pycache__/
+*.pyc
+.env
