@@ -1,0 +1,11 @@
+{
+  "name": "agy-cli-toolbar",
+  "version": "1.0.0",
+  "description": "Adaptive, high-resolution 2-line status bar for Google Antigravity CLI (agy) in pure Python. Real-time API cost, context caching, 5h/weekly quotas & token speed.",
+  "author": {
+    "name": "marceloasl99"
+  },
+  "repository": "https://github.com/marceloasl99/agy-cli-toolbar",
+  "license": "MIT",
+  "logo": "assets/logo.svg"
+}
