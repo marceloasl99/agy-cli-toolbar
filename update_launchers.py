@@ -31,7 +31,11 @@ if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%" >nul 2>&1
 if not exist "%ANTIGRAVITY_GEMINI_DIR%" mkdir "%ANTIGRAVITY_GEMINI_DIR%" >nul 2>&1
 if not exist "%ANTIGRAVITY_APP_DATA_DIR%" mkdir "%ANTIGRAVITY_APP_DATA_DIR%" >nul 2>&1
 
+python "C:\\Users\\ma038\\.antigravity-custom\\profile_manager.py" pre-run {pname} >nul 2>&1
+
 "%~dp0agy.exe" %*
+
+python "C:\\Users\\ma038\\.antigravity-custom\\profile_manager.py" post-run {pname} >nul 2>&1
 endlocal
 """
     with open(fpath, "w", encoding="utf-8") as f:

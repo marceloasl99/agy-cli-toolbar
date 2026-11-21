@@ -203,6 +203,7 @@ def get_profile_cli_command(profile_key):
     return f"agy-{profile_key}"
 
 def open_cmd_for_profile(profile_key):
+    pm.pre_run(profile_key)
     cmd_name = get_profile_cli_command(profile_key)
     profiles = pm.discover_profiles()
     prof = profiles.get(profile_key, {})
