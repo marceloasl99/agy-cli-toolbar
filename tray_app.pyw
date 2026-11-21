@@ -741,6 +741,13 @@ class DesktopWidget(tk.Tk):
         y = self.config_data.get("y", 100)
         w = self.config_data.get("width", 740)
         h = self.config_data.get("height", 480)
+        # Ensure coordinates are within visible screen bounds
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        if x < 0 or x + 150 > screen_w:
+            x = max((screen_w - w) // 2, 50)
+        if y < 0 or y + 150 > screen_h:
+            y = max((screen_h - h) // 2, 50)
         self.geometry(f"{w}x{h}+{x}+{y}")
 
         self.theme_colors = THEMES.get(self.config_data.get("theme", "Dark Slate"), THEMES["Dark Slate"])
@@ -752,8 +759,12 @@ class DesktopWidget(tk.Tk):
         self.build_ui()
         self.bind_events()
 
-        if not self.config_data.get("visible", True):
-            self.withdraw()
+        # Always make sure window is visible when launched
+        self.config_data["visible"] = True
+        save_widget_config(self.config_data)
+        self.deiconify()
+        self.lift()
+        self.focus_force()
 
         self.refresh_profiles(force=True)
         self.schedule_next_refresh()
@@ -785,15 +796,19 @@ class DesktopWidget(tk.Tk):
 
     def bring_to_front(self):
         """Wakes up the widget cleanly without creating duplicates."""
-        self.deiconify()
-        self.lift()
-        self.attributes("-topmost", True)
-        self.focus_force()
-        if not self.config_data.get("always_on_top", True):
-            self.after(1000, lambda: self.attributes("-topmost", False))
-        self.config_data["visible"] = True
-        save_widget_config(self.config_data)
-        self.refresh_profiles(force=True)
+        try:
+            self.deiconify()
+            self.overrideredirect(True)
+            self.lift()
+            self.attributes("-topmost", True)
+            self.focus_force()
+            self.config_data["visible"] = True
+            save_widget_config(self.config_data)
+            self.refresh_profiles(force=True)
+            if not self.config_data.get("always_on_top", True):
+                self.after(800, lambda: self.attributes("-topmost", False))
+        except Exception:
+            pass
 
     def build_ui(self):
         self.outer_frame = tk.Frame(self, bg=self.theme_colors["bg"], bd=1, relief="solid",
@@ -1360,6 +1375,7 @@ def enforce_single_instance_or_wake():
     """
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
+        server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_sock.bind(("127.0.0.1", SINGLE_INSTANCE_PORT))
         server_sock.listen(5)
         return server_sock
@@ -1371,9 +1387,10 @@ def enforce_single_instance_or_wake():
             client.connect(("127.0.0.1", SINGLE_INSTANCE_PORT))
             client.sendall(b"SHOW\n")
             client.close()
+            sys.exit(0)
         except Exception:
             pass
-        sys.exit(0)
+        return None
 
 if __name__ == "__main__":
     try:
