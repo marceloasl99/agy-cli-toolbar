@@ -16,13 +16,22 @@ echo -e "\033[32m[✓] Directory ready: $CUSTOM_DIR\033[0m"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -f "$SCRIPT_DIR/statusline.py" ]; then
-    cp "$SCRIPT_DIR/statusline.py" "$TARGET_SCRIPT"
-else
-    curl -fsSL "https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/statusline.py" -o "$TARGET_SCRIPT"
+for s in statusline.py profile_manager.py oauth_auth.py; do
+    if [ -f "$SCRIPT_DIR/$s" ]; then
+        cp "$SCRIPT_DIR/$s" "$CUSTOM_DIR/$s"
+    else
+        curl -fsSL "https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/$s" -o "$CUSTOM_DIR/$s"
+    fi
+    chmod +x "$CUSTOM_DIR/$s"
+    echo -e "\033[32m[✓] Installed script: $CUSTOM_DIR/$s\033[0m"
+done
+
+# agy-profile symlink in /usr/local/bin or ~/.local/bin
+if [ -d "$HOME/.local/bin" ]; then
+    ln -sf "$CUSTOM_DIR/profile_manager.py" "$HOME/.local/bin/agy-profile"
+    chmod +x "$HOME/.local/bin/agy-profile"
+    echo -e "\033[32m[✓] Created agy-profile command in ~/.local/bin\033[0m"
 fi
-chmod +x "$TARGET_SCRIPT"
-echo -e "\033[32m[✓] Installed statusline script: $TARGET_SCRIPT\033[0m"
 
 if [ ! -f "$TARGET_CONFIG" ]; then
     if [ -f "$SCRIPT_DIR/config.example.json" ]; then
@@ -39,5 +48,8 @@ if [ -f "$SETTINGS_PATH" ]; then
 fi
 
 echo -e "\n\033[32mInstallation completed successfully!\033[0m"
-echo -e "To activate right now in your open Antigravity CLI session, run:"
-echo -e "\033[33m/statusline python3 $TARGET_SCRIPT\033[0m\n"
+echo -e "Commands available:"
+echo -e "  \033[33magy-profile list\033[0m              # List Google profiles & quotas"
+echo -e "  \033[33magy-profile switch <name|num>\033[0m # Switch active profile"
+echo -e "  \033[33magy-profile auth <name|num>\033[0m   # Authenticate with Google OAuth"
+echo -e "  \033[33magy-profile create <name>\033[0m     # Create new profile\n"

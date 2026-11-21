@@ -1,4 +1,4 @@
-# Antigravity CLI Toolbar (agy-cli-toolbar) Installer for Windows
+﻿# Antigravity CLI Toolbar (agy-cli-toolbar) Installer for Windows
 $ErrorActionPreference = "Stop"
 
 Write-Host "==============================================" -ForegroundColor Cyan
@@ -9,7 +9,10 @@ $userProfile = [System.Environment]::GetFolderPath([System.Environment+SpecialFo
 $customDir = Join-Path $userProfile ".antigravity-custom"
 $targetScript = Join-Path $customDir "statusline.py"
 $targetConfig = Join-Path $customDir "config.json"
+$targetProfileMgr = Join-Path $customDir "profile_manager.py"
+$targetOAuth = Join-Path $customDir "oauth_auth.py"
 $settingsPath = Join-Path $userProfile ".gemini\antigravity-cli\settings.json"
+$agyBinDir = Join-Path $userProfile "AppData\Local\agy\bin"
 
 # 1. Create target directory
 if (!(Test-Path $customDir)) {
@@ -17,15 +20,18 @@ if (!(Test-Path $customDir)) {
     Write-Host "[✓] Created custom directory: $customDir" -ForegroundColor Green
 }
 
-# 2. Copy script
-$sourceScript = Join-Path $PSScriptRoot "statusline.py"
-if (Test-Path $sourceScript) {
-    Copy-Item $sourceScript $targetScript -Force
-    Write-Host "[✓] Installed statusline script: $targetScript" -ForegroundColor Green
-} else {
-    Write-Host "[!] Could not find local statusline.py, downloading..." -ForegroundColor Yellow
-    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/statusline.py" -OutFile $targetScript
-    Write-Host "[✓] Downloaded and installed statusline.py" -ForegroundColor Green
+# 2. Copy scripts
+$scripts = @("statusline.py", "profile_manager.py", "oauth_auth.py", "tray_app.pyw")
+foreach ($s in $scripts) {
+    $sourceScript = Join-Path $PSScriptRoot $s
+    $destScript = Join-Path $customDir $s
+    if (Test-Path $sourceScript) {
+        Copy-Item $sourceScript $destScript -Force
+        Write-Host "[✓] Installed: $destScript" -ForegroundColor Green
+    } else {
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/$s" -OutFile $destScript
+        Write-Host "[✓] Downloaded and installed: $s" -ForegroundColor Green
+    }
 }
 
 # 3. Create default config if not existing
@@ -39,14 +45,25 @@ if (!(Test-Path $targetConfig)) {
     Write-Host "[✓] Created configuration file: $targetConfig" -ForegroundColor Green
 }
 
-# 4. Configure settings.json
+# 4. Install command wrappers
+if (Test-Path $agyBinDir) {
+    $wrappers = @("agy-profile.cmd", "agy-profile.ps1", "agy-tray.cmd")
+    foreach ($w in $wrappers) {
+        $sourceW = Join-Path $PSScriptRoot $w
+        if (Test-Path $sourceW) {
+            Copy-Item $sourceW (Join-Path $agyBinDir $w) -Force
+        }
+    }
+    Write-Host "[✓] Installed agy-profile and agy-tray CLI commands to: $agyBinDir" -ForegroundColor Green
+}
+
+# 5. Configure settings.json
 if (Test-Path $settingsPath) {
     Write-Host "[*] Checking Antigravity CLI settings..." -ForegroundColor Cyan
     try {
         $settingsRaw = Get-Content $settingsPath -Raw -Encoding UTF8
         $settings = $settingsRaw | ConvertFrom-Json
 
-        $escapedPath = $targetScript.Replace("\", "\\")
         $statusLineConfig = [PSCustomObject]@{
             type = "command"
             command = "python $targetScript"
@@ -69,6 +86,20 @@ if (Test-Path $settingsPath) {
     }
 }
 
+# 6. Create Desktop Shortcut
+try {
+    $shortcutScript = Join-Path $PSScriptRoot "create_shortcut.py"
+    if (Test-Path $shortcutScript) {
+        python $shortcutScript | Out-Null
+        Write-Host "[✓] Created desktop shortcut: Antigravity Quotas" -ForegroundColor Green
+    }
+} catch {
+    # Non-fatal
+}
+
 Write-Host "`nInstallation completed successfully!" -ForegroundColor Green
-Write-Host "To test right now in your open Antigravity CLI session, run:" -ForegroundColor White
-Write-Host "/statusline python $targetScript`n" -ForegroundColor Yellow
+Write-Host "Commands available:" -ForegroundColor White
+Write-Host "  agy-profile list              # List Google profiles & quotas" -ForegroundColor Yellow
+Write-Host "  agy-profile switch <name|num> # Switch active profile" -ForegroundColor Yellow
+Write-Host "  agy-profile auth <name|num>   # Authenticate with Google OAuth" -ForegroundColor Yellow
+Write-Host "  agy-profile create <name>     # Create new profile`n" -ForegroundColor Yellow
