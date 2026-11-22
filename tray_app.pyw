@@ -228,6 +228,8 @@ def get_profile_cli_command(profile_key):
         return "agy"
     if profile_key.startswith("perfil") and profile_key[6:].isdigit():
         return f"agy{profile_key[6:]}"
+    if profile_key.startswith("agy") and profile_key[3:].isdigit():
+        return profile_key
     if profile_key.isdigit():
         return f"agy{profile_key}" if profile_key != "1" else "agy"
     return f"agy-{profile_key}"
@@ -2099,14 +2101,31 @@ class DesktopWidget(tk.Tk):
         ent_email.pack(fill="x", pady=(2, 6))
 
         def on_create():
-            nome = ent_nome.get().strip()
+            nome = ent_nome.get().strip().lower()
             email = ent_email.get().strip()
-            if nome:
-                pm.cmd_create(nome, email if email else None)
-                win.destroy()
-                self.auto_fit_layout()
-                if self.tray:
-                    self.tray.update_tray_menu()
+            if not nome:
+                messagebox.showwarning("Nome Obrigatório", "Por favor, digite o nome do perfil (ex: agy5, agy6, perfil5).", parent=win)
+                return
+            success = pm.cmd_create(nome, email if email else None)
+            if not success:
+                messagebox.showerror("Erro ao Criar", f"Não foi possível criar o perfil '{nome}'.", parent=win)
+                return
+
+            # Garante ativação imediata no config e ajuste da grade
+            self.config_data.setdefault("enabled_profiles", {})[nome] = True
+            if "profile_order" in self.config_data and nome not in self.config_data["profile_order"]:
+                self.config_data["profile_order"].append(nome)
+            if self.config_data.get("grid_preset") == "2x2":
+                self.config_data["grid_preset"] = "Auto"
+            save_widget_config(self.config_data)
+
+            win.destroy()
+            self.auto_fit_layout()
+            self.refresh_profiles(force=True)
+            if self.tray:
+                self.tray.update_tray_menu()
+            cmd_name = get_profile_cli_command(nome)
+            messagebox.showinfo("Perfil Criado", f"Perfil '{nome}' criado e ativado com sucesso!\nComando CLI: {cmd_name}", parent=self)
 
         tk.Button(win, text="Criar Perfil", font=("Segoe UI", 9, "bold"), fg="#ffffff", bg="#0284c7",
                   activebackground="#0369a1", bd=0, padx=14, pady=6, cursor="hand2", command=on_create).pack(pady=14)

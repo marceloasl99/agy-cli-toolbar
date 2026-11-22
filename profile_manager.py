@@ -157,15 +157,19 @@ def discover_profiles():
             full_path = os.path.join(PROFILES_BASE_DIR, item)
             if os.path.isdir(full_path):
                 if item.startswith("perfil") and item[6:].isdigit():
-                    numbered_profiles.append((int(item[6:]), item, full_path))
+                    num = int(item[6:])
+                    numbered_profiles.append((num, item, full_path, f"Perfil {num}"))
+                elif item.startswith("agy") and item[3:].isdigit():
+                    num = int(item[3:])
+                    numbered_profiles.append((num, item, full_path, f"Perfil {num} ({item})"))
                 elif item.isdigit():
-                    numbered_profiles.append((int(item), item, full_path))
+                    num = int(item)
+                    numbered_profiles.append((num, item, full_path, f"Perfil {num}"))
                 else:
                     custom_profiles.append((item, full_path))
 
-        # Adiciona primeiro os numerados padrão em ordem crescente (perfil2, perfil3, perfil4...)
-        for num, item, full_path in sorted(numbered_profiles, key=lambda x: x[0]):
-            disp = f"Perfil {num}"
+        # Adiciona primeiro os numerados padrão em ordem crescente (perfil2, perfil3, perfil4, agy5, agy6...)
+        for num, item, full_path, disp in sorted(numbered_profiles, key=lambda x: x[0]):
             profiles[item] = {
                 "name": item,
                 "display": disp,
@@ -554,14 +558,119 @@ def cmd_switch(target):
     print(f"    ⚡ As próximas sessões do Antigravity CLI e Desktop usarão este perfil.\n")
     return True
 
+def sync_profile_to_config_and_launchers(name, email=None):
+    """Ensures launchers (.cmd), widget_config.json, and quota cache are properly set for a profile."""
+    prof_dir = os.path.join(PROFILES_BASE_DIR, name)
+    gemini_dir = os.path.join(prof_dir, ".gemini")
+    acc_email = email
+    if not acc_email:
+        acc_file = os.path.join(gemini_dir, "google_accounts.json")
+        if os.path.exists(acc_file):
+            try:
+                with open(acc_file, "r", encoding="utf-8") as f:
+                    acc_email = json.load(f).get("active", f"{name}@gmail.com")
+            except Exception:
+                acc_email = f"{name}@gmail.com"
+        else:
+            acc_email = f"{name}@gmail.com"
+
+    # Create dedicated launcher scripts in AGY_BIN_DIR
+    if os.path.exists(AGY_BIN_DIR):
+        cmd_names = [f"agy-{name}.cmd"]
+        if name.startswith("perfil") and name[6:].isdigit():
+            cmd_names.append(f"agy{name[6:]}.cmd")
+            cmd_names.append(f"agy-{name[6:]}.cmd")
+        elif name.startswith("agy") and name[3:].isdigit():
+            cmd_names.append(f"{name}.cmd")
+            cmd_names.append(f"agy-{name[3:]}.cmd")
+        elif name.isdigit():
+            cmd_names.append(f"agy{name}.cmd")
+        else:
+            cmd_names.append(f"{name}.cmd")
+
+        homepath = prof_dir[2:]
+        cmd_content = f"""@echo off
+setlocal
+set "AGY_PROFILE={name}"
+set "PERFIL_ROOT={prof_dir}"
+set "USERPROFILE=%PERFIL_ROOT%"
+set "HOME=%PERFIL_ROOT%"
+set "HOMEDRIVE=C:"
+set "HOMEPATH={homepath}"
+set "APPDATA=%PERFIL_ROOT%\\AppData\\Roaming"
+set "LOCALAPPDATA=%PERFIL_ROOT%\\AppData\\Local"
+set "GEMINI_HOME=%PERFIL_ROOT%"
+set "ANTIGRAVITY_GEMINI_DIR=%PERFIL_ROOT%\\.gemini"
+set "ANTIGRAVITY_APP_DATA_DIR=%PERFIL_ROOT%\\.gemini\\antigravity-cli"
+
+if not exist "%APPDATA%\\Antigravity" mkdir "%APPDATA%\\Antigravity" >nul 2>&1
+if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%" >nul 2>&1
+if not exist "%ANTIGRAVITY_GEMINI_DIR%" mkdir "%ANTIGRAVITY_GEMINI_DIR%" >nul 2>&1
+if not exist "%ANTIGRAVITY_APP_DATA_DIR%" mkdir "%ANTIGRAVITY_APP_DATA_DIR%" >nul 2>&1
+
+"%~dp0agy.exe" %*
+endlocal
+"""
+        for cname in cmd_names:
+            try:
+                with open(os.path.join(AGY_BIN_DIR, cname), "w", encoding="utf-8") as f:
+                    f.write(cmd_content)
+            except Exception:
+                pass
+
+    # Sincroniza widget_config.json
+    try:
+        conf_file = os.path.join(CUSTOM_DIR, "widget_config.json")
+        if os.path.exists(conf_file):
+            with open(conf_file, "r", encoding="utf-8") as f:
+                cdata = json.load(f)
+            cdata.setdefault("enabled_profiles", {})[name] = True
+            if "profile_order" in cdata and name not in cdata["profile_order"]:
+                cdata["profile_order"].append(name)
+            if "profile_models" in cdata and name not in cdata["profile_models"]:
+                cdata["profile_models"][name] = [
+                    "Gemini 3.8 Flash (High)",
+                    "Claude Sonnet 4.6 (Thinking)",
+                    "GPT-OSS 120B (Medium)"
+                ]
+            with open(conf_file, "w", encoding="utf-8") as f:
+                json.dump(cdata, f, indent=2)
+    except Exception:
+        pass
+
+    # Sincroniza cache de cotas
+    try:
+        q_file = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
+        qdata = {}
+        if os.path.exists(q_file):
+            with open(q_file, "r", encoding="utf-8") as f:
+                qdata = json.load(f)
+        if name not in qdata:
+            qdata[name] = {
+                "email": acc_email,
+                "display": name.upper(),
+                "has_oauth": False,
+                "is_pro": False,
+                "gemini_5h": {"used_pct": 0.0, "rem_pct": 100.0, "reset_in_seconds": 0},
+                "gemini_7d": {"used_pct": 0.0, "rem_pct": 100.0, "reset_in_seconds": 0},
+                "outros_3p": {"used_pct": 0.0, "rem_pct": 100.0, "reset_in_seconds": 0},
+                "argon": None
+            }
+            with open(q_file, "w", encoding="utf-8") as f:
+                json.dump(qdata, f, indent=2)
+    except Exception:
+        pass
+
 def cmd_create(name, email=None):
-    if not name or not name.isalnum():
-        name = "".join(c for c in name if c.isalnum() or c in ("-", "_")).lower()
+    if not name:
+        return False
+    name = "".join(c for c in name if c.isalnum() or c in ("-", "_")).lower()
 
     profiles = discover_profiles()
     if name in profiles:
         print(f"{YELLOW}[!] Um perfil com o nome '{name}' já existe.{RESET}")
-        return False
+        sync_profile_to_config_and_launchers(name, email)
+        return True
 
     prof_dir = os.path.join(PROFILES_BASE_DIR, name)
     gemini_dir = os.path.join(prof_dir, ".gemini")
@@ -594,43 +703,8 @@ def cmd_create(name, email=None):
     with open(acc_file, "w", encoding="utf-8") as f:
         json.dump({"active": acc_email, "old": []}, f, indent=2)
 
-    # Create dedicated launcher script in AGY_BIN_DIR if it exists
-    if os.path.exists(AGY_BIN_DIR):
-        cmd_names = [f"agy-{name}.cmd"]
-        if name.startswith("perfil") and name[6:].isdigit():
-            cmd_names.append(f"agy{name[6:]}.cmd")
-        elif name.isdigit():
-            cmd_names.append(f"agy{name}.cmd")
-
-        homepath = prof_dir[2:]
-        cmd_content = f"""@echo off
-setlocal
-set "AGY_PROFILE={name}"
-set "PERFIL_ROOT={prof_dir}"
-set "USERPROFILE=%PERFIL_ROOT%"
-set "HOME=%PERFIL_ROOT%"
-set "HOMEDRIVE=C:"
-set "HOMEPATH={homepath}"
-set "APPDATA=%PERFIL_ROOT%\\AppData\\Roaming"
-set "LOCALAPPDATA=%PERFIL_ROOT%\\AppData\\Local"
-set "GEMINI_HOME=%PERFIL_ROOT%"
-set "ANTIGRAVITY_GEMINI_DIR=%PERFIL_ROOT%\\.gemini"
-set "ANTIGRAVITY_APP_DATA_DIR=%PERFIL_ROOT%\\.gemini\\antigravity-cli"
-
-if not exist "%APPDATA%\\Antigravity" mkdir "%APPDATA%\\Antigravity" >nul 2>&1
-if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%" >nul 2>&1
-if not exist "%ANTIGRAVITY_GEMINI_DIR%" mkdir "%ANTIGRAVITY_GEMINI_DIR%" >nul 2>&1
-if not exist "%ANTIGRAVITY_APP_DATA_DIR%" mkdir "%ANTIGRAVITY_APP_DATA_DIR%" >nul 2>&1
-
-"%~dp0agy.exe" %*
-endlocal
-"""
-        for cname in cmd_names:
-            try:
-                with open(os.path.join(AGY_BIN_DIR, cname), "w", encoding="utf-8") as f:
-                    f.write(cmd_content)
-            except Exception:
-                pass
+    # Cria launchers e sincroniza widget_config.json e quotas
+    sync_profile_to_config_and_launchers(name, acc_email)
 
     print(f"\n{BOLD}{GREEN}[✓] Perfil '{name}' criado com sucesso!{RESET}")
     print(f"    📁 Pasta: {prof_dir}")
