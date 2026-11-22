@@ -157,10 +157,10 @@ DEFAULT_WIDGET_CONFIG = {
     "profile_nicknames": {},
     "profile_positions": {},
     "profile_models": {
-        "perfil1": ["Gemini 2.5 Pro", "GPT-4o"],
-        "perfil2": ["Gemini 2.5 Pro"],
-        "perfil3": ["Gemini 2.5 Pro", "GPT-4o"],
-        "perfil4": ["Argon", "GPT-4o", "Gemini 2.5 Pro"]
+        "perfil1": ["Gemini 3.8 Flash (High)", "Claude Sonnet 4.6 (Thinking)", "GPT-OSS 120B (Medium)"],
+        "perfil2": ["Gemini 3.8 Flash (High)", "Claude Sonnet 4.6 (Thinking)", "GPT-OSS 120B (Medium)"],
+        "perfil3": ["Gemini 3.8 Flash (High)", "Claude Sonnet 4.6 (Thinking)", "GPT-OSS 120B (Medium)"],
+        "perfil4": ["Gemini 4 Argon (High)", "Gemini 3.8 Flash (High)", "Claude Sonnet 4.6 (Thinking)", "GPT-OSS 120B (Medium)"]
     }
 }
 
@@ -727,9 +727,9 @@ class SettingsDialog(tk.Toplevel):
         tk.Label(card_info, text="📌 ESTRUTURA OFICIAL DE COTAS DO ANTIGRAVITY", font=("Segoe UI", 8, "bold"), fg="#38bdf8", bg="#1e293b").pack(anchor="w", padx=10, pady=(8, 4))
         
         rows_expl = [
-            ("★ Cota Gemini", "Modelos: Gemini 2.5 Pro, 2.5 Flash, 3.8 Flash, Thinking\nJanela móvel de 5 horas e limite semanal compartilhado."),
-            ("⚡ Cota Outros (3P)", "Modelos: GPT-4o, GPT-4o-mini, Claude 3.5 Sonnet, Claude 3.7 Sonnet, o3-mini\nCota única agrupada para modelos de terceiros."),
-            ("✦ Cota Argon", "Modelos: Argon Advanced Reasoning, Google DeepMind Frontier\nExclusivo para assinantes de planos Pro pagos.")
+            ("★ Cota Gemini", "Modelos: Gemini 3.8 Flash (Low, Medium, High)\nJanela móvel de 5 horas e limite semanal compartilhado."),
+            ("⚡ Cota GPT/Claude", "Modelos: Claude Sonnet 4.6 (Thinking), Claude Opus 4.6 (Thinking), GPT-OSS 120B (Medium)\nCota única agrupada para modelos de terceiros."),
+            ("✦ Cota Argon", "Modelos: Gemini 4 Argon (Low, Medium, High)\nExclusivo para assinantes de planos Pro pagos.")
         ]
         for title, desc in rows_expl:
             r = tk.Frame(card_info, bg="#1e293b")
@@ -844,14 +844,19 @@ class SettingsDialog(tk.Toplevel):
         card = tk.Frame(f, bg="#1e293b", bd=1, relief="solid", highlightbackground="#334155", highlightthickness=1)
         card.pack(fill="x", pady=6, padx=2)
 
+        active_key = pm.get_active_profile()
+        all_profiles = pm.discover_profiles()
+        active_info = pm.get_profile_info(all_profiles.get(active_key, {"name": active_key, "gemini_dir": ""})) if active_key in all_profiles else {}
+        active_email = active_info.get("email", "Desconhecido")
+
         info_rows = [
-            ("Usuário Ativo:", os.environ.get("USERNAME", "ma038")),
-            ("Conta Google:", "sartorimarcelo@gmail.com"),
+            ("Usuário Windows:", os.environ.get("USERNAME", "ma038")),
+            ("Perfil & Conta Ativa:", f"{active_key.upper()} — {active_email}"),
             ("Instância Única (Porta IPC):", f"127.0.0.1:{SINGLE_INSTANCE_PORT}"),
             ("Diretório de Configurações:", CUSTOM_DIR),
             ("Repositório de Código:", r"C:\55\3\agy-cli-toolbar"),
             ("Comandos CLI Suportados:", "agy (Perfil 1), agy2 (Perfil 2), agy3 (Perfil 3), agy4 (Perfil 4)..."),
-            ("Cotas Suportadas:", "Gemini (5h/7d), Outros (GPT/Claude), Argon (Pro)")
+            ("Cotas Suportadas:", "Gemini 3.8 Flash (5h/7d) • GPT/Claude (3P) • Gemini 4 Argon (Pro)")
         ]
 
         for label, val in info_rows:
@@ -919,6 +924,27 @@ class SettingsDialog(tk.Toplevel):
 
         self.parent.config_data.update(self.config_copy)
         save_widget_config(self.parent.config_data)
+
+        # Sync pro_profiles into profiles_quotas.json so CLI & Dashboard agree
+        pro_dict = self.config_copy.get("pro_profiles", {})
+        if pro_dict:
+            q_file = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
+            try:
+                q_data = {}
+                if os.path.exists(q_file):
+                    with open(q_file, "r", encoding="utf-8") as f:
+                        q_data = json.load(f)
+                for p_key, is_pro_val in pro_dict.items():
+                    if p_key in q_data:
+                        q_data[p_key]["is_pro"] = bool(is_pro_val)
+                        if not is_pro_val:
+                            q_data[p_key]["argon"] = None
+                        elif not q_data[p_key].get("argon"):
+                            q_data[p_key]["argon"] = {"used_pct": 0.0, "rem_pct": 100.0, "reset_in_seconds": 0}
+                with open(q_file, "w", encoding="utf-8") as f:
+                    json.dump(q_data, f, indent=2)
+            except Exception:
+                pass
 
         self.parent.apply_full_config()
         self.destroy()
@@ -1040,6 +1066,11 @@ class DesktopWidget(tk.Tk):
         self.outer_frame.config(bg=self.theme_colors["bg"], highlightbackground=self.theme_colors["card_border"])
         self.header.config(bg=self.theme_colors["header_bg"])
         self.title_lbl.config(bg=self.theme_colors["header_bg"], fg=self.theme_colors["text"], font=self.get_font(10, "bold"))
+        if hasattr(self, "kpi_bar"):
+            self.kpi_bar.config(bg=self.theme_colors["footer_bg"], highlightbackground=self.theme_colors["card_border"])
+            self.kpi_active_lbl.config(bg=self.theme_colors["footer_bg"], font=self.get_font(8, "bold"))
+            self.kpi_best_lbl.config(bg=self.theme_colors["footer_bg"], font=self.get_font(8, "bold"))
+            self.kpi_stats_lbl.config(bg=self.theme_colors["footer_bg"], fg=self.theme_colors["text_muted"], font=self.get_font(8))
         self.grid_container.config(bg=self.theme_colors["bg"])
         self.footer.config(bg=self.theme_colors["footer_bg"])
         self.time_lbl.config(bg=self.theme_colors["footer_bg"], font=self.get_font(8))
@@ -1172,6 +1203,26 @@ class DesktopWidget(tk.Tk):
                                      bg=self.theme_colors["header_bg"], cursor="hand2")
         self.btn_settings.pack(side="right", padx=4)
         self.btn_settings.bind("<Button-1>", lambda e: self.open_settings())
+
+        # Executive Summary KPI Strip
+        self.kpi_bar = tk.Frame(self.outer_frame, bg=self.theme_colors["footer_bg"], bd=0,
+                                highlightbackground=self.theme_colors["card_border"], highlightthickness=1)
+        self.kpi_bar.pack(fill="x", side="top", padx=8, pady=(4, 0))
+
+        self.kpi_active_lbl = tk.Label(self.kpi_bar, text="🟢 Ativo: --", font=self.get_font(8, "bold"),
+                                       fg="#22c55e", bg=self.theme_colors["footer_bg"])
+        self.kpi_active_lbl.pack(side="left", padx=(8, 12), pady=3)
+
+        self.kpi_best_lbl = tk.Label(self.kpi_bar, text="💡 Melhor Livre: --", font=self.get_font(8, "bold"),
+                                     fg="#38bdf8", bg=self.theme_colors["footer_bg"], cursor="hand2")
+        self.kpi_best_lbl.pack(side="left", padx=(0, 10), pady=3)
+        self.best_free_profile_key = None
+        self.kpi_best_lbl.bind("<Button-1>", lambda e: self.activate_best_free_profile())
+        ToolTip(self.kpi_best_lbl, "Clique para ativar o perfil com maior cota livre disponível")
+
+        self.kpi_stats_lbl = tk.Label(self.kpi_bar, text="Contas: --", font=self.get_font(8),
+                                      fg=self.theme_colors["text_muted"], bg=self.theme_colors["footer_bg"])
+        self.kpi_stats_lbl.pack(side="right", padx=8, pady=3)
 
         # Grid Profiles Container
         self.grid_container = tk.Frame(self.outer_frame, bg=self.theme_colors["bg"])
@@ -1371,17 +1422,96 @@ class DesktopWidget(tk.Tk):
             self.btn_details.config(text="▲ Resumo" if self.all_expanded else "▼ Detalhes")
         self.refresh_profiles()
 
+    def activate_best_free_profile(self):
+        if getattr(self, "best_free_profile_key", None):
+            self.switch_profile_and_refresh(self.best_free_profile_key)
+
+    def show_profile_context_menu(self, event, profile_key):
+        profiles = pm.discover_profiles()
+        prof = profiles.get(profile_key, {})
+        info = pm.get_profile_info(prof) if prof else {}
+        cmd_name = get_profile_cli_command(profile_key)
+        is_exp = self.expanded_cards.get(profile_key, self.all_expanded)
+        is_pro = info.get("is_pro", False)
+
+        menu = tk.Menu(self, tearoff=0, bg="#1e293b", fg="#f8fafc",
+                       activebackground="#0284c7", activeforeground="#ffffff",
+                       font=("Segoe UI", 9))
+        menu.add_command(label=f"⚡ Abrir CLI ({cmd_name})", command=lambda: open_cmd_for_profile(profile_key))
+        menu.add_command(label="🖥️ Abrir Desktop", command=lambda: pm.cmd_desktop(profile_key))
+        menu.add_command(label="🔄 Ativar Perfil", command=lambda: self.switch_profile_and_refresh(profile_key))
+        menu.add_separator()
+        menu.add_command(
+            label="▲ Recolher Modelos" if is_exp else "▼ Detalhar Modelos",
+            command=lambda: self.toggle_card_detail(profile_key)
+        )
+        menu.add_command(label="✏️ Renomear Apelido...", command=lambda: self.rename_profile_inline(profile_key))
+        menu.add_command(
+            label="✦ Desativar Argon (Padrão)" if is_pro else "✦ Ativar Plano Pro (Argon)",
+            command=lambda: self.toggle_profile_pro_inline(profile_key)
+        )
+        menu.add_separator()
+        if prof.get("root"):
+            menu.add_command(label="📁 Abrir Pasta do Perfil", command=lambda: open_folder(prof["root"]))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def rename_profile_inline(self, profile_key):
+        nicknames = self.config_data.setdefault("profile_nicknames", {})
+        cur = nicknames.get(profile_key, "")
+        new_nick = simpledialog.askstring(
+            "Renomear Perfil",
+            f"Digite o apelido para {profile_key} (vazio para padrão):",
+            initialvalue=cur,
+            parent=self
+        )
+        if new_nick is not None:
+            if new_nick.strip():
+                nicknames[profile_key] = new_nick.strip()
+            else:
+                nicknames.pop(profile_key, None)
+            save_widget_config(self.config_data)
+            self.refresh_profiles(force=True)
+
+    def toggle_profile_pro_inline(self, profile_key):
+        pro_dict = self.config_data.setdefault("pro_profiles", {"perfil4": True})
+        cur = pro_dict.get(profile_key, profile_key == "perfil4")
+        new_val = not cur
+        pro_dict[profile_key] = new_val
+        save_widget_config(self.config_data)
+
+        q_file = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
+        try:
+            q_data = {}
+            if os.path.exists(q_file):
+                with open(q_file, "r", encoding="utf-8") as f:
+                    q_data = json.load(f)
+            if profile_key in q_data:
+                q_data[profile_key]["is_pro"] = new_val
+                if not new_val:
+                    q_data[profile_key]["argon"] = None
+                elif not q_data[profile_key].get("argon"):
+                    q_data[profile_key]["argon"] = {"used_pct": 0.0, "rem_pct": 100.0, "reset_in_seconds": 0}
+                with open(q_file, "w", encoding="utf-8") as f:
+                    json.dump(q_data, f, indent=2)
+        except Exception:
+            pass
+        self.refresh_profiles(force=True)
+
     def build_profile_card(self, parent, key, prof, row, col):
         is_active = (key == pm.get_active_profile())
         th = self.theme_colors
         card_bg = th["card_active_bg"] if is_active else th["card_bg"]
         border_col = th["card_active_border"] if is_active else th["card_border"]
+        border_w = 2 if is_active else 1
 
-        card = tk.Frame(parent, bg=card_bg, bd=1, relief="solid", highlightbackground=border_col, highlightthickness=1)
+        card = tk.Frame(parent, bg=card_bg, bd=1, relief="solid", highlightbackground=border_col, highlightthickness=border_w)
         card.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
         parent.grid_columnconfigure(col, weight=1)
 
-        # Row 1: Header Row (Dot + Name + Command + ATIVO Tag + Status + Detalhes + Arrows)
+        # Row 1: Header Row (Dot + Name + Command + ATIVO Tag + Status + Detalhes + Arrows + Context Menu)
         row_top = tk.Frame(card, bg=card_bg)
         row_top.pack(fill="x", padx=8, pady=(4, 1))
 
@@ -1400,7 +1530,7 @@ class DesktopWidget(tk.Tk):
         if is_active:
             tag_lbl.pack(side="left", padx=4)
 
-        # Right box: Status and Reorder buttons
+        # Right box: Status, Detalhes, Reorder arrows, and Menu button
         top_right = tk.Frame(row_top, bg=card_bg)
         top_right.pack(side="right")
 
@@ -1412,7 +1542,7 @@ class DesktopWidget(tk.Tk):
                               font=self.get_font(7, "bold"), fg="#38bdf8", bg=card_bg, cursor="hand2")
         btn_detail.pack(side="left", padx=(0, 4))
         btn_detail.bind("<Button-1>", lambda e, p=key: self.toggle_card_detail(p))
-        ToolTip(btn_detail, "Clique para expandir ou recolher os modelos desta cota")
+        ToolTip(btn_detail, "Clique para expandir ou recolher os modelos exatos de cada cota")
 
         btn_left = tk.Label(top_right, text="◀", font=self.get_font(9), fg="#64748b", bg=card_bg, cursor="hand2")
         btn_left.pack(side="left", padx=1)
@@ -1421,6 +1551,11 @@ class DesktopWidget(tk.Tk):
         btn_right = tk.Label(top_right, text="▶", font=self.get_font(9), fg="#64748b", bg=card_bg, cursor="hand2")
         btn_right.pack(side="left", padx=1)
         btn_right.bind("<Button-1>", lambda e, p=key: self.shift_profile_order(p, 1))
+
+        btn_menu = tk.Label(top_right, text="⋮", font=self.get_font(9, "bold"), fg="#94a3b8", bg=card_bg, cursor="hand2")
+        btn_menu.pack(side="left", padx=(3, 0))
+        btn_menu.bind("<Button-1>", lambda e, p=key: self.show_profile_context_menu(e, p))
+        ToolTip(btn_menu, "Ações rápidas do perfil (ou clique direito no cartão)")
 
         # Row 2: Email & Badges Row
         row_meta = tk.Frame(card, bg=card_bg)
@@ -1432,60 +1567,70 @@ class DesktopWidget(tk.Tk):
         badges_box = tk.Frame(row_meta, bg=card_bg)
         badges_box.pack(side="right")
 
-        # Row 3: Bars Container (In-bar bargraphs for Gemini 5h, Gemini 7d, Outros 3P, and Argon if Pro)
+        # Row 3: Bars Container (In-bar bargraphs for Gemini 5h, Gemini 7d, GPT/Claude 3P, and Argon if Pro)
         bars_container = tk.Frame(card, bg=card_bg)
         bars_container.pack(fill="x", padx=8, pady=(2, 2))
+
+        if not hasattr(self, "bar_tooltips"):
+            self.bar_tooltips = {}
 
         # 1. Gemini (5h) in-bar
         gem5_row = tk.Frame(bars_container, bg=card_bg)
         gem5_row.pack(fill="x", pady=1)
         gem5_bar = self.create_compact_bargraph(gem5_row)
         gem5_bar["cv"].pack(fill="x", expand=True)
-        ToolTip(gem5_bar["cv"], "★ COTA GEMINI (Compartilhada):\n• Gemini 2.5 Pro\n• Gemini 2.5 Flash\n• Gemini 3.8 Flash\n• Gemini 2.5 Thinking\nJanela móvel de 5 horas.")
+        tt_gem5 = ToolTip(gem5_bar["cv"], "★ COTA GEMINI (5h)")
 
         # 2. Gemini (7d) in-bar
         gemw_row = tk.Frame(bars_container, bg=card_bg)
         gemw_row.pack(fill="x", pady=1)
         gemw_bar = self.create_compact_bargraph(gemw_row)
         gemw_bar["cv"].pack(fill="x", expand=True)
-        ToolTip(gemw_bar["cv"], "📅 COTA GEMINI SEMANAL (7 Dias):\n• Gemini 2.5 Pro / Flash / Thinking\nLimite semanal global compartilhado.")
+        tt_gemw = ToolTip(gemw_bar["cv"], "📅 COTA GEMINI SEMANAL (7d)")
 
-        # 3. Outros (GPT/Claude) in-bar
+        # 3. Outros (GPT / Claude) in-bar
         outros_row = tk.Frame(bars_container, bg=card_bg)
         outros_row.pack(fill="x", pady=1)
         outros_bar = self.create_compact_bargraph(outros_row)
         outros_bar["cv"].pack(fill="x", expand=True)
-        ToolTip(outros_bar["cv"], "⚡ COTA OUTROS (GPT / Claude):\n• GPT-4o\n• GPT-4o-mini\n• Claude 3.5 Sonnet\n• Claude 3.7 Sonnet\n• o3-mini\nCota unificada de modelos 3P.")
+        tt_outros = ToolTip(outros_bar["cv"], "⚡ COTA GPT / CLAUDE (Outros)")
 
-        # 4. Argon (Pro) in-bar - Criado aqui, empacotado apenas em perfis com plano Pro
+        # 4. Argon (Pro) in-bar - Empacotado apenas em perfis com plano Pro
         argon_row = tk.Frame(bars_container, bg=card_bg)
         argon_bar = self.create_compact_bargraph(argon_row)
         argon_bar["cv"].pack(fill="x", expand=True)
+        tt_argon = ToolTip(argon_bar["cv"], "✦ COTA ARGON (Plano Pro Pago)")
         if not hasattr(self, "argon_tooltips"):
             self.argon_tooltips = {}
-        self.argon_tooltips[key] = ToolTip(argon_bar["cv"], "✦ COTA ARGON (Plano Pro Pago)")
+        self.argon_tooltips[key] = tt_argon
+        self.bar_tooltips[key] = {
+            "gem5": tt_gem5,
+            "gemw": tt_gemw,
+            "outros": tt_outros,
+            "argon": tt_argon,
+        }
 
-        # Row 4: Expandable Drawer (Lista explicativa detalhada de modelos por cota)
+        # Row 4: Expandable Drawer (Lista explicativa com os modelos exatos de cada cota)
         drawer = tk.Frame(card, bg=self.theme_colors.get("header_bg", "#0f172a"), bd=1, relief="solid",
                           highlightbackground=border_col, highlightthickness=1)
-        
+
         # Seção Gemini no Drawer
         f_gem_det = tk.Frame(drawer, bg=drawer["bg"])
         f_gem_det.pack(fill="x", padx=6, pady=2)
         tk.Label(f_gem_det, text="★ Gemini:", font=self.get_font(7, "bold"), fg="#38bdf8", bg=drawer["bg"]).pack(side="left")
-        tk.Label(f_gem_det, text="2.5 Pro • 2.5 Flash • 3.8 Flash • Thinking", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
+        tk.Label(f_gem_det, text="Gemini 3.8 Flash (Low • Medium • High)", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
 
-        # Seção Outros no Drawer
+        # Seção Outros (GPT / Claude) no Drawer
         f_out_det = tk.Frame(drawer, bg=drawer["bg"])
         f_out_det.pack(fill="x", padx=6, pady=2)
-        tk.Label(f_out_det, text="⚡ Outros:", font=self.get_font(7, "bold"), fg="#34d399", bg=drawer["bg"]).pack(side="left")
-        tk.Label(f_out_det, text="GPT-4o • GPT-4o-mini • Claude 3.5/3.7 • o3-mini", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
+        tk.Label(f_out_det, text="⚡ GPT/Claude:", font=self.get_font(7, "bold"), fg="#34d399", bg=drawer["bg"]).pack(side="left")
+        tk.Label(f_out_det, text="Claude Sonnet 4.6 • Claude Opus 4.6 • GPT-OSS 120B", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
 
         # Seção Argon no Drawer - Empacotada apenas se is_pro for True
         f_arg_det = tk.Frame(drawer, bg=drawer["bg"])
         lbl_arg_title = tk.Label(f_arg_det, text="✦ Argon (Pro):", font=self.get_font(7, "bold"), fg="#c084fc", bg=drawer["bg"])
         lbl_arg_title.pack(side="left")
-        lbl_arg_models = tk.Label(f_arg_det, text="Argon Reasoning • DeepMind Frontier", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"])
+        lbl_arg_models = tk.Label(f_arg_det, text="Gemini 4 Argon (Low • Medium • High)", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"])
         lbl_arg_models.pack(side="left", padx=4)
 
         if is_expanded:
@@ -1511,6 +1656,7 @@ class DesktopWidget(tk.Tk):
         btn_activate.pack(side="right")
 
         card.bind("<Double-Button-1>", lambda e, p=key: open_cmd_for_profile(p))
+        card.bind("<Button-3>", lambda e, p=key: self.show_profile_context_menu(e, p))
 
         self.card_views[key] = {
             "card": card,
@@ -1553,6 +1699,7 @@ class DesktopWidget(tk.Tk):
         th = self.theme_colors
         card_bg = th["card_active_bg"] if is_active else th["card_bg"]
         border_col = th["card_active_border"] if is_active else th["card_border"]
+        border_w = 2 if is_active else 1
 
         # Alert highlight if critical
         thresh = self.config_data.get("alert_threshold", 85)
@@ -1569,7 +1716,7 @@ class DesktopWidget(tk.Tk):
         if max(used_5h, used_w, used_ot, used_ar) >= thresh:
             border_col = "#ef4444"
 
-        view["card"].config(bg=card_bg, highlightbackground=border_col)
+        view["card"].config(bg=card_bg, highlightbackground=border_col, highlightthickness=border_w)
         view["dot_lbl"].config(fg="#22c55e" if is_active else "#64748b", bg=card_bg)
 
         nicknames = self.config_data.get("profile_nicknames", {})
@@ -1626,8 +1773,36 @@ class DesktopWidget(tk.Tk):
         self.update_compact_bargraph(view["gemw_bar"], used_w, l_w, r_w, theme_color="#0284c7", track_color="#0c4a6e")
 
         # 3. Update Outros (GPT/Claude) In-Bar
-        l_ot, r_ot = format_bar_texts("Outros (GPT/Claude)", used_ot, ot.get("reset_in_seconds", 0), "⚡ ")
+        l_ot, r_ot = format_bar_texts("GPT / Claude", used_ot, ot.get("reset_in_seconds", 0), "⚡ ")
         self.update_compact_bargraph(view["outros_bar"], used_ot, l_ot, r_ot, theme_color="#10b981", track_color="#064e3b")
+
+        # Update dynamic tooltips with exact models and current quota percentages
+        tts = getattr(self, "bar_tooltips", {}).get(key, {})
+        if "gem5" in tts:
+            rst5 = pm.format_countdown(g5.get("reset_in_seconds", 0))
+            tts["gem5"].text_func = (
+                f"★ COTA GEMINI — Janela 5h ({100.0 - used_5h:.1f}% livre • reset: {rst5})\n"
+                "Modelos exatos incluídos:\n"
+                "• Gemini 3.8 Flash (Low)\n"
+                "• Gemini 3.8 Flash (Medium)\n"
+                "• Gemini 3.8 Flash (High)"
+            )
+        if "gemw" in tts:
+            rstw = pm.format_countdown(gw.get("reset_in_seconds", 0))
+            tts["gemw"].text_func = (
+                f"📅 COTA GEMINI — Semanal 7d ({100.0 - used_w:.1f}% livre • reset: {rstw})\n"
+                "Limite semanal global compartilhado:\n"
+                "• Gemini 3.8 Flash (Low / Medium / High)"
+            )
+        if "outros" in tts:
+            rsto = pm.format_countdown(ot.get("reset_in_seconds", 0))
+            tts["outros"].text_func = (
+                f"⚡ COTA GPT / CLAUDE (3P) ({100.0 - used_ot:.1f}% livre • reset: {rsto})\n"
+                "Modelos exatos incluídos:\n"
+                "• Claude Sonnet 4.6 (Thinking)\n"
+                "• Claude Opus 4.6 (Thinking)\n"
+                "• GPT-OSS 120B (Medium)"
+            )
 
         # 4. Update Argon In-Bar (Exibe no Pro, esconde completamente nos planos sem Argon)
         if is_pro:
@@ -1638,9 +1813,16 @@ class DesktopWidget(tk.Tk):
             if not view["f_arg_det"].winfo_ismapped():
                 view["f_arg_det"].pack(fill="x", padx=6, pady=2)
             view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#c084fc")
-            view["lbl_arg_models"].config(text="Argon Reasoning • DeepMind Frontier", fg="#cbd5e1", font=self.get_font(7))
+            view["lbl_arg_models"].config(text="Gemini 4 Argon (Low • Medium • High)", fg="#cbd5e1", font=self.get_font(7))
+            rsta = pm.format_countdown(ar.get("reset_in_seconds", 0))
             if hasattr(self, "argon_tooltips") and key in self.argon_tooltips:
-                self.argon_tooltips[key].text_func = "✦ COTA ARGON (Plano Pro Pago):\n• Argon Advanced Reasoning\n• Google DeepMind Frontier\nExclusivo da conta Pro ativa."
+                self.argon_tooltips[key].text_func = (
+                    f"✦ COTA ARGON — Plano Pro Pago ({100.0 - used_ar:.1f}% livre • reset: {rsta})\n"
+                    "Modelos exatos incluídos:\n"
+                    "• Gemini 4 Argon (Low)\n"
+                    "• Gemini 4 Argon (Medium)\n"
+                    "• Gemini 4 Argon (High)"
+                )
         else:
             # Esconde completamente a barra do Argon e os detalhes nos planos padrão sem Argon!
             if view["argon_row"].winfo_ismapped():
@@ -1712,11 +1894,46 @@ class DesktopWidget(tk.Tk):
                     c = idx % self.cols
                 self.build_profile_card(self.grid_container, key, prof, row=r, col=c)
 
+        best_key = None
+        best_rem = -1.0
+        connected_count = 0
+        pro_count = 0
+        nicknames = self.config_data.get("profile_nicknames", {})
+
         for key in active_keys:
             prof = profiles[key]
             info = pm.get_profile_info(prof)
             is_active = (key == active_prof)
             self.update_card_in_place(key, prof, info, is_active)
+
+            if info.get("has_oauth"):
+                connected_count += 1
+            if info.get("is_pro"):
+                pro_count += 1
+            g5 = info.get("gemini_5h") or {}
+            rem_5h = max(100.0 - float(g5.get("used_pct", 0.0)), 0.0)
+            score = rem_5h + (0.1 if info.get("is_pro") else 0.0)
+            if score > best_rem:
+                best_rem = score
+                best_key = key
+
+        # Update Executive Summary KPI Strip
+        if hasattr(self, "kpi_active_lbl"):
+            act_disp = nicknames.get(active_prof) or profiles.get(active_prof, {}).get("display", active_prof.upper())
+            act_cmd = get_profile_cli_command(active_prof)
+            self.kpi_active_lbl.config(text=f"🟢 Ativo: {act_disp} ({act_cmd})")
+
+            if best_key and best_key in profiles:
+                self.best_free_profile_key = best_key
+                b_disp = nicknames.get(best_key) or profiles[best_key].get("display", best_key.upper())
+                b_g5 = pm.get_profile_info(profiles[best_key]).get("gemini_5h") or {}
+                b_rem = max(100.0 - float(b_g5.get("used_pct", 0.0)), 0.0)
+                self.kpi_best_lbl.config(text=f"💡 Melhor Livre: {b_disp} ({b_rem:.0f}% 5h)")
+            else:
+                self.best_free_profile_key = None
+                self.kpi_best_lbl.config(text="💡 Melhor Livre: --")
+
+            self.kpi_stats_lbl.config(text=f"Conectadas: {connected_count}/{len(active_keys)} • Pro: {pro_count}")
 
         self.time_lbl.config(text=f"Atualizado: {time.strftime('%H:%M:%S')}")
 

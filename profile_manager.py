@@ -167,10 +167,22 @@ def discover_profiles():
                 }
     return profiles
 
-# Antigravity Model Groups & Quota Families
-GEMINI_MODELS = ["Gemini 2.5 Pro", "Gemini 2.5 Flash", "Gemini 3.8 Flash", "Gemini Thinking"]
-OUTROS_MODELS = ["GPT-4o", "GPT-4o-mini", "Claude 3.5 Sonnet", "Claude 3.7 Sonnet", "o3-mini"]
-ARGON_MODELS = ["Argon Advanced Reasoning", "Google DeepMind Frontier"]
+# Antigravity Model Groups & Quota Families (exact models from `agy models`)
+GEMINI_MODELS = [
+    "Gemini 3.8 Flash (Low)",
+    "Gemini 3.8 Flash (Medium)",
+    "Gemini 3.8 Flash (High)",
+]
+OUTROS_MODELS = [
+    "Claude Sonnet 4.6 (Thinking)",
+    "Claude Opus 4.6 (Thinking)",
+    "GPT-OSS 120B (Medium)",
+]
+ARGON_MODELS = [
+    "Gemini 4 Argon (Low)",
+    "Gemini 4 Argon (Medium)",
+    "Gemini 4 Argon (High)",
+]
 
 def get_profile_info(prof):
     gem_dir = prof["gemini_dir"]
@@ -241,9 +253,22 @@ def get_profile_info(prof):
 
     gemini_5h = quotas.get("gemini_5h") or quotas.get("quota_5h")
     gemini_7d = quotas.get("gemini_7d") or quotas.get("quota_weekly")
-    outros_3p = quotas.get("outros_3p") or quotas.get("model_quotas", {}).get("GPT-4o")
-    argon = quotas.get("argon") or quotas.get("model_quotas", {}).get("Argon")
-    is_pro = bool(quotas.get("is_pro") or prof["name"] == "perfil4" or argon)
+    outros_3p = quotas.get("outros_3p")
+    argon = quotas.get("argon")
+
+    pro_profiles = {}
+    widget_cfg_file = os.path.join(CUSTOM_DIR, "widget_config.json")
+    if os.path.exists(widget_cfg_file):
+        try:
+            with open(widget_cfg_file, "r", encoding="utf-8") as f:
+                pro_profiles = json.load(f).get("pro_profiles", {})
+        except Exception:
+            pass
+
+    if prof["name"] in pro_profiles:
+        is_pro = bool(pro_profiles[prof["name"]])
+    else:
+        is_pro = bool(quotas.get("is_pro") or prof["name"] == "perfil4" or argon)
 
     return {
         "email": email,
@@ -325,7 +350,7 @@ def cmd_list():
         else:
             bar_empty_w = make_mini_bar(0.0, length=14)
             print(f"     📅 Gemini (7d)  : [{bar_empty_w}] {GRAY}0.0% (sem histórico){RESET}")
-        print(f"        {GRAY}↳ Modelos Gemini:{RESET} {CYAN}Gemini 2.5 Pro, 2.5 Flash, 3.8 Flash, Thinking{RESET}")
+        print(f"        {GRAY}↳ Modelos Gemini    :{RESET} {CYAN}Gemini 3.8 Flash (Low, Medium, High){RESET}")
 
         # 2. COTA OUTROS (GPT / CLAUDE)
         qo = info.get("outros_3p")
@@ -338,7 +363,7 @@ def cmd_list():
         else:
             bar_empty_o = make_mini_bar(0.0, length=14)
             print(f"     ⚡ Outros (3P)  : [{bar_empty_o}] {GREEN} 0.0%{RESET} {GRAY}(disponível){RESET}")
-        print(f"        {GRAY}↳ Modelos Outros:{RESET} {YELLOW}GPT-4o, GPT-4o-mini, Claude 3.5/3.7 Sonnet, o3-mini{RESET}")
+        print(f"        {GRAY}↳ Modelos GPT/Claude:{RESET} {YELLOW}Claude Sonnet 4.6 (Thinking), Claude Opus 4.6 (Thinking), GPT-OSS 120B (Medium){RESET}")
 
         # 3. COTA ARGON (SE CONTA PRO)
         if info["is_pro"]:
@@ -352,7 +377,7 @@ def cmd_list():
             else:
                 bar_empty_a = make_mini_bar(0.0, length=14)
                 print(f"     ✦ Argon (Pro)  : [{bar_empty_a}] {GREEN} 0.0%{RESET} {GRAY}(disponível){RESET}")
-            print(f"        {GRAY}↳ Modelos Argon :{RESET} {MAGENTA}Argon Advanced Reasoning, Frontier Pro{RESET}")
+            print(f"        {GRAY}↳ Modelos Argon     :{RESET} {MAGENTA}Gemini 4 Argon (Low, Medium, High){RESET}")
         
         print(f"     📁 Pasta: {GRAY}{prof['root']}{RESET}\n")
 

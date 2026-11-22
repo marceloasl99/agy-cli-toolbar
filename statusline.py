@@ -316,16 +316,24 @@ def make_bar(pct, length, colors, low_good=True, smooth=True):
 
 def calculate_cost(model_name, in_tokens, out_tokens, cached_tokens=0):
     m = model_name.lower()
-    if "pro" in m:
-        rate_in = 3.50 / 1_000_000
-        rate_out = 14.00 / 1_000_000
-        rate_cache = 0.875 / 1_000_000
+    if "opus" in m:
+        rate_in = 15.00 / 1_000_000
+        rate_out = 75.00 / 1_000_000
+        rate_cache = 1.50 / 1_000_000
     elif "claude" in m or "sonnet" in m:
         rate_in = 3.00 / 1_000_000
         rate_out = 15.00 / 1_000_000
         rate_cache = 0.75 / 1_000_000
+    elif "argon" in m or "neon" in m or "hydrogen" in m or "pro" in m:
+        rate_in = 3.50 / 1_000_000
+        rate_out = 14.00 / 1_000_000
+        rate_cache = 0.875 / 1_000_000
+    elif "gpt-oss" in m or "gpt" in m:
+        rate_in = 1.50 / 1_000_000
+        rate_out = 6.00 / 1_000_000
+        rate_cache = 0.375 / 1_000_000
     else:
-        # Default Gemini Flash
+        # Default Gemini 3.8 Flash
         rate_in = 0.75 / 1_000_000
         rate_out = 3.75 / 1_000_000
         rate_cache = 0.1875 / 1_000_000
@@ -366,12 +374,26 @@ def get_active_profile_name(email=None):
         return env_p
     if email:
         email_map = {
+            "marcelo.thermomix@gmail.com": "perfil1",
             "sartorimarcelo@gmail.com": "perfil1",
             "masl90380@gmail.com": "perfil2",
+            "ma0381@gmail.com": "perfil3",
             "muvytec@gmail.com": "perfil4"
         }
         if email in email_map:
             return email_map[email]
+        # Dynamic fallback across ~/.agy-perfis directories
+        perfis_dir = os.path.join(os.path.expanduser("~"), ".agy-perfis")
+        if os.path.exists(perfis_dir):
+            for p_name in sorted(os.listdir(perfis_dir)):
+                w_file = os.path.join(perfis_dir, p_name, ".gemini", "wincred.json")
+                if os.path.exists(w_file):
+                    try:
+                        with open(w_file, "r", encoding="utf-8") as f:
+                            if json.load(f).get("id_token_email") == email:
+                                return p_name
+                    except Exception:
+                        pass
     active_file = os.path.join(CUSTOM_DIR, "active_profile.json")
     if os.path.exists(active_file):
         try:
@@ -697,8 +719,8 @@ def main():
 
         # Active Profile & Quota Cache Sync
         active_prof = get_active_profile_name(email)
-        argon_q = parse_quota(quota, rate_limits, ["argon", "argon-5h", "gemini-argon"])
-        outros_q = parse_quota(quota, rate_limits, ["3p-5h", "3p", "gpt-4o", "claude", "third_party", "outros"])
+        argon_q = parse_quota(quota, rate_limits, ["argon", "argon-5h", "gemini-4-argon", "gemini-argon"])
+        outros_q = parse_quota(quota, rate_limits, ["3p-5h", "3p", "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b", "claude", "third_party", "outros"])
         save_profile_quota(active_prof, email, quota_5h, quota_weekly, quota_outros=outros_q, quota_argon=argon_q)
 
         # Account / Email, Profile & Plan Tier

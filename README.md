@@ -142,7 +142,12 @@ O `agy-cli-toolbar` inclui uma ferramenta completa para gerenciar múltiplas con
 
 O aplicativo de bandeja (`tray_app.pyw`) roda em segundo plano sem janela de console e oferece:
 * **Ícone na Bandeja (Tray)**: Ao lado do relógio do Windows com menu de contexto de acesso rápido a cada conta.
-* **Widget Flutuante Moderno & Painel de Configurações**:
+* **Faixa Executiva KPI no Dashboard**: Mostra o perfil ativo no momento, recomendação automática do perfil com maior cota livre (1-clique para ativar) e contagem de contas conectadas/Pro.
+* **Cotas Oficiais & Modelos Exatos**:
+  * **★ Gemini (5h & 7d)**: `Gemini 3.8 Flash (Low)`, `Gemini 3.8 Flash (Medium)`, `Gemini 3.8 Flash (High)`
+  * **⚡ GPT / Claude (Outros 3P)**: `Claude Sonnet 4.6 (Thinking)`, `Claude Opus 4.6 (Thinking)`, `GPT-OSS 120B (Medium)`
+  * **✦ Argon (Exclusivo Plano Pro Pago)**: `Gemini 4 Argon (Low)`, `Gemini 4 Argon (Medium)`, `Gemini 4 Argon (High)` *(ocultado automaticamente em perfis padrão)*
+* **Widget Flutuante Moderno & Painel de Configurações (`880x640` com Scroll)**:
   - **Botão `⚙️ Config`**: Permite personalizar em tempo real:
     - **Grade e Disposição (Todos os Presets)**: `1x1`, `2x1`, `1x2`, `2x2`, `3x1`, `1x3`, `2x3`, `3x2`, `4x1`, `1x4`, `2x4`, `4x2`, `1x5`, `5x1`, `3x3`.
     - **Tempo de Atualização (Refresh)**: De 5 a 60 segundos com atualização 100% livre de cintilação (in-place redraw).
