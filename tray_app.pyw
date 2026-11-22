@@ -796,7 +796,7 @@ class SettingsDialog(tk.Toplevel):
 
             # Calculate optimal window dimensions incorporating zoom scale
             opt_w = min(max(int(round(cols * 330 * new_scale + 20)), 360), 2000)
-            opt_h = min(max(int(round(rows * 135 * new_scale + 75)), 200), 1400)
+            opt_h = min(max(int(round(rows * 195 * new_scale + 80)), 200), 1400)
             self.parent.geometry(f"{opt_w}x{opt_h}")
             self.config_copy["width"] = opt_w
             self.config_copy["height"] = opt_h
@@ -1151,7 +1151,7 @@ class DesktopWidget(tk.Tk):
 
         scale = float(self.config_data.get("ui_scale", 1.20))
         opt_w = min(max(int(round(cols * 330 * scale + 20)), 360), 2000)
-        opt_h = min(max(int(round(rows * 135 * scale + 75)), 200), 1400)
+        opt_h = min(max(int(round(rows * 195 * scale + 80)), 200), 1400)
         self.geometry(f"{opt_w}x{opt_h}")
         self.config_data["width"] = opt_w
         self.config_data["height"] = opt_h
@@ -1215,15 +1215,24 @@ class DesktopWidget(tk.Tk):
         d["cv"].coords(d["left_id"], 8, h // 2)
         d["cv"].coords(d["right_id"], w - 8, h // 2)
 
-    def update_compact_bargraph(self, d, pct, left_text, right_text):
+    def update_compact_bargraph(self, d, pct, left_text, right_text, theme_color=None, track_color=None):
         pct = min(max(pct, 0.0), 100.0)
         d["pct"] = pct
         d["left_text"] = left_text
         d["right_text"] = right_text
 
         thresh = self.config_data.get("alert_threshold", 85)
-        col = "#22c55e" if pct < 60 else ("#eab308" if pct < thresh else "#ef4444")
+        if pct >= thresh:
+            col = "#ef4444"
+        elif pct >= 60:
+            col = "#eab308"
+        elif theme_color:
+            col = theme_color
+        else:
+            col = "#22c55e"
         d["fill_col"] = col
+
+        track_bg = track_color if track_color else self.theme_colors["bar_bg"]
 
         w = d["cv"].winfo_width()
         if w < 50:
@@ -1233,7 +1242,7 @@ class DesktopWidget(tk.Tk):
 
         bar_font = self.get_font(8, "bold")
         d["cv"].coords(d["track_id"], 0, 0, w, h)
-        d["cv"].itemconfig(d["track_id"], fill=self.theme_colors["bar_bg"])
+        d["cv"].itemconfig(d["track_id"], fill=track_bg)
         d["cv"].coords(d["fill_id"], 0, 0, fill_w, h)
         d["cv"].itemconfig(d["fill_id"], fill=col)
 
@@ -1297,15 +1306,39 @@ class DesktopWidget(tk.Tk):
         models_box = tk.Frame(row_meta, bg=card_bg)
         models_box.pack(side="right")
 
-        # Row 3: Quota 5h Compact In-Bar Bargraph
-        q5_row = tk.Frame(card, bg=card_bg)
-        q5_row.pack(fill="x", padx=8, pady=(2, 2))
+        # Row 3: Bars Container (In-bar bargraphs for every model in plan + rolling limits)
+        bars_container = tk.Frame(card, bg=card_bg)
+        bars_container.pack(fill="x", padx=8, pady=(2, 2))
+
+        profile_models = self.config_data.get("profile_models", {})
+        models = profile_models.get(key) or []
+        if not models:
+            if key == "perfil4":
+                models = ["Argon", "GPT-4o", "Gemini 2.5 Pro"]
+            elif key == "perfil1":
+                models = ["Gemini 2.5 Pro", "GPT-4o"]
+            elif key == "perfil2":
+                models = ["Gemini 2.5 Pro"]
+            else:
+                models = ["Gemini 2.5 Pro", "GPT-4o"]
+
+        model_bars = {}
+        for m in models:
+            m_row = tk.Frame(bars_container, bg=card_bg)
+            m_row.pack(fill="x", pady=1)
+            b = self.create_compact_bargraph(m_row)
+            b["cv"].pack(fill="x", expand=True)
+            model_bars[m] = b
+
+        # Flash 5h Compact In-Bar Bargraph
+        q5_row = tk.Frame(bars_container, bg=card_bg)
+        q5_row.pack(fill="x", pady=1)
         q5_bar = self.create_compact_bargraph(q5_row)
         q5_bar["cv"].pack(fill="x", expand=True)
 
-        # Row 4: Quota 7d Compact In-Bar Bargraph
-        qw_row = tk.Frame(card, bg=card_bg)
-        qw_row.pack(fill="x", padx=8, pady=(2, 3))
+        # Weekly 7d Compact In-Bar Bargraph
+        qw_row = tk.Frame(bars_container, bg=card_bg)
+        qw_row.pack(fill="x", pady=1)
         qw_bar = self.create_compact_bargraph(qw_row)
         qw_bar["cv"].pack(fill="x", expand=True)
 
@@ -1339,6 +1372,7 @@ class DesktopWidget(tk.Tk):
             "email_lbl": email_lbl,
             "status_lbl": status_lbl,
             "models_box": models_box,
+            "model_bars": model_bars,
             "q5_bar": q5_bar,
             "qw_bar": qw_bar,
             "btn_activate": btn_activate
@@ -1422,10 +1456,45 @@ class DesktopWidget(tk.Tk):
                             padx=4, pady=1)
             pill.pack(side="left", padx=(0, 2))
 
-        # 5h Quota in-bar update
+        # Model-Specific In-Bar Bargraphs
+        def get_model_style(model_name):
+            ml = model_name.lower()
+            if "argon" in ml:
+                return "#9333ea", "#2d0a4e", "✦ "
+            elif "gpt" in ml or "openai" in ml:
+                return "#10b981", "#063726", "⚡ "
+            elif "claude" in ml:
+                return "#d97706", "#3f1d0b", "✻ "
+            else:
+                return "#3b82f6", "#0f2942", "★ "
+
+        model_quotas = info.get("model_quotas", {})
+        for m, m_bar in view.get("model_bars", {}).items():
+            mq = model_quotas.get(m)
+            fill_col, track_col, m_ico = get_model_style(m)
+            if mq:
+                used_m = float(mq.get("used_pct", 0.0))
+                rem_m = max(100.0 - used_m, 0.0)
+                rst_m = pm.format_countdown(mq.get("reset_in_seconds", 0))
+            else:
+                used_m = 0.0
+                rem_m = 100.0
+                rst_m = "pronto"
+
+            left_m = f"{m_ico}{m}  {used_m:4.1f}%"
+            if self.config_data.get("show_free_pct", True):
+                right_m = f"{rem_m:4.1f}% livre"
+                if self.config_data.get("show_countdown", True) and rst_m != "pronto":
+                    right_m += f" • {rst_m}"
+            else:
+                right_m = f"reset {rst_m}" if (self.config_data.get("show_countdown", True) and rst_m != "pronto") else ""
+
+            self.update_compact_bargraph(m_bar, used_m, left_m, right_m, theme_color=fill_col, track_color=track_col)
+
+        # 5h Quota in-bar update (Gemini Flash)
         rem_5h = max(100.0 - used_5h, 0.0)
         rst_5h = pm.format_countdown(q5.get("reset_in_seconds", 0))
-        left_5h = f"⏳ 5h  {used_5h:4.1f}%"
+        left_5h = f"⏳ Flash 5h  {used_5h:4.1f}%"
         if self.config_data.get("show_free_pct", True):
             right_5h = f"{rem_5h:4.1f}% livre"
             if self.config_data.get("show_countdown", True) and rst_5h != "pronto":
@@ -1433,12 +1502,12 @@ class DesktopWidget(tk.Tk):
         else:
             right_5h = f"reset {rst_5h}" if self.config_data.get("show_countdown", True) else ""
 
-        self.update_compact_bargraph(view["q5_bar"], used_5h, left_5h, right_5h)
+        self.update_compact_bargraph(view["q5_bar"], used_5h, left_5h, right_5h, theme_color="#22c55e")
 
-        # 7d Quota in-bar update
+        # 7d Quota in-bar update (Semanal)
         rem_w = max(100.0 - used_w, 0.0)
         rst_w = pm.format_countdown(qw.get("reset_in_seconds", 0))
-        left_w = f"📅 7d  {used_w:4.1f}%"
+        left_w = f"📅 Semanal 7d  {used_w:4.1f}%"
         if self.config_data.get("show_free_pct", True):
             right_w = f"{rem_w:4.1f}% livre"
             if self.config_data.get("show_countdown", True) and rst_w != "pronto":
@@ -1446,7 +1515,7 @@ class DesktopWidget(tk.Tk):
         else:
             right_w = f"reset {rst_w}" if self.config_data.get("show_countdown", True) else ""
 
-        self.update_compact_bargraph(view["qw_bar"], used_w, left_w, right_w)
+        self.update_compact_bargraph(view["qw_bar"], used_w, left_w, right_w, theme_color="#0284c7")
 
         if is_active:
             view["tag_lbl"].pack(side="left", padx=4)
@@ -1475,7 +1544,9 @@ class DesktopWidget(tk.Tk):
         active_keys, profiles = self.get_ordered_enabled_profiles()
         active_prof = pm.get_active_profile()
 
-        signature = f"{','.join(active_keys)}|cols={self.cols}|th={self.config_data.get('theme')}"
+        profile_models = self.config_data.get("profile_models", {})
+        models_sig = json.dumps(profile_models, sort_keys=True)
+        signature = f"{','.join(active_keys)}|cols={self.cols}|th={self.config_data.get('theme')}|m={models_sig}"
 
         if force or signature != self.known_profiles_signature:
             self.known_profiles_signature = signature

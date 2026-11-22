@@ -387,8 +387,8 @@ def get_active_profile_name(email=None):
             return base
     return "perfil1"
 
-def save_profile_quota(profile_name, email, quota_5h, quota_weekly):
-    if not quota_5h and not quota_weekly:
+def save_profile_quota(profile_name, email, quota_5h, quota_weekly, model_quotas=None):
+    if not quota_5h and not quota_weekly and not model_quotas:
         return
     cache_file = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
     quotas = {}
@@ -416,6 +416,10 @@ def save_profile_quota(profile_name, email, quota_5h, quota_weekly):
             "reset_in_seconds": quota_weekly[2],
             "reset_time": quota_weekly[3]
         }
+    if model_quotas:
+        cur_mq = entry.get("model_quotas", {})
+        cur_mq.update(model_quotas)
+        entry["model_quotas"] = cur_mq
     quotas[profile_name] = entry
     try:
         os.makedirs(CUSTOM_DIR, exist_ok=True)
@@ -669,7 +673,17 @@ def main():
 
         # Active Profile & Quota Cache Sync
         active_prof = get_active_profile_name(email)
-        save_profile_quota(active_prof, email, quota_5h, quota_weekly)
+        model_quotas_parsed = {}
+        argon_q = parse_quota(quota, rate_limits, ["argon", "argon-5h", "gemini-argon"])
+        if argon_q:
+            model_quotas_parsed["Argon"] = {"used_pct": argon_q[0], "rem_pct": argon_q[1], "reset_in_seconds": argon_q[2]}
+        gpt_q = parse_quota(quota, rate_limits, ["gpt-4o", "3p-5h", "3p", "openai-gpt-4o"])
+        if gpt_q:
+            model_quotas_parsed["GPT-4o"] = {"used_pct": gpt_q[0], "rem_pct": gpt_q[1], "reset_in_seconds": gpt_q[2]}
+        pro_q = parse_quota(quota, rate_limits, ["pro", "gemini-pro", "gemini-2.5-pro", "pro-5h"])
+        if pro_q:
+            model_quotas_parsed["Gemini 2.5 Pro"] = {"used_pct": pro_q[0], "rem_pct": pro_q[1], "reset_in_seconds": pro_q[2]}
+        save_profile_quota(active_prof, email, quota_5h, quota_weekly, model_quotas_parsed)
 
         # Account / Email, Profile & Plan Tier
         if conf.get("show_email", True) and email and not is_narrow:

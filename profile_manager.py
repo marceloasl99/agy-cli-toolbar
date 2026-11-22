@@ -260,6 +260,7 @@ def get_profile_info(prof):
         "models": models,
         "quota_5h": quotas.get("quota_5h"),
         "quota_weekly": quotas.get("quota_weekly"),
+        "model_quotas": quotas.get("model_quotas", {}),
         "quota_updated": quotas.get("updated_at")
     }
 
@@ -330,6 +331,21 @@ def cmd_list():
         else:
             bar_empty_w = make_mini_bar(0.0, length=14)
             print(f"     📅 Cota 7d:  [{bar_empty_w}] {GRAY}0.0% (sem histórico){RESET}")
+
+        # Model-Specific Quotas (Argon, GPT-4o, Gemini 2.5 Pro, etc.)
+        model_q = info.get("model_quotas", {})
+        for m in info.get("models", []):
+            mq = model_q.get(m)
+            m_icon = "✦" if "argon" in m.lower() else ("⚡" if "gpt" in m.lower() else ("✻" if "claude" in m.lower() else "★"))
+            if mq:
+                u_pct = mq.get("used_pct", 0.0)
+                m_bar = make_mini_bar(u_pct, length=14)
+                m_rst = format_countdown(mq.get("reset_in_seconds", 0))
+                m_col = GREEN if u_pct < 60 else (YELLOW if u_pct < 85 else RED)
+                print(f"     {m_icon} {m:<9}: [{m_bar}] {m_col}{u_pct:4.1f}%{RESET} {GRAY}(reset em {m_rst}){RESET}")
+            else:
+                m_bar_empty = make_mini_bar(0.0, length=14)
+                print(f"     {m_icon} {m:<9}: [{m_bar_empty}] {GREEN} 0.0%{RESET} {GRAY}(disponível){RESET}")
         
         print(f"     📁 Pasta: {GRAY}{prof['root']}{RESET}\n")
 
