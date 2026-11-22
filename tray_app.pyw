@@ -134,8 +134,8 @@ THEMES = {
 DEFAULT_WIDGET_CONFIG = {
     "x": 100,
     "y": 100,
-    "width": 760,
-    "height": 420,
+    "width": 820,
+    "height": 560,
     "always_on_top": True,
     "visible": True,
     "locked": False,
@@ -887,9 +887,9 @@ class SettingsDialog(tk.Toplevel):
             self.config_copy["columns"] = cols
 
             # Calculate optimal window dimensions incorporating zoom scale
-            card_h = 245 if self.default_expanded_var.get() else 195
-            opt_w = min(max(int(round(cols * 330 * new_scale + 20)), 360), 2000)
-            opt_h = min(max(int(round(rows * card_h * new_scale + 80)), 200), 1400)
+            card_h = 290 if self.default_expanded_var.get() else 225
+            opt_w = min(max(int(round(cols * 350 * new_scale + 24)), 380), 2000)
+            opt_h = min(max(int(round(rows * card_h * new_scale + 85)), 220), 1400)
             self.parent.geometry(f"{opt_w}x{opt_h}")
             self.config_copy["width"] = opt_w
             self.config_copy["height"] = opt_h
@@ -1255,9 +1255,9 @@ class DesktopWidget(tk.Tk):
         self.config_data["columns"] = cols
 
         scale = float(self.config_data.get("ui_scale", 1.20))
-        card_h = 245 if getattr(self, "all_expanded", False) else 195
-        opt_w = min(max(int(round(cols * 330 * scale + 20)), 360), 2000)
-        opt_h = min(max(int(round(rows * card_h * scale + 80)), 200), 1400)
+        card_h = 290 if getattr(self, "all_expanded", False) else 225
+        opt_w = min(max(int(round(cols * 350 * scale + 24)), 380), 2000)
+        opt_h = min(max(int(round(rows * card_h * scale + 85)), 220), 1400)
         self.geometry(f"{opt_w}x{opt_h}")
         self.config_data["width"] = opt_w
         self.config_data["height"] = opt_h
@@ -1457,13 +1457,16 @@ class DesktopWidget(tk.Tk):
         outros_bar["cv"].pack(fill="x", expand=True)
         ToolTip(outros_bar["cv"], "⚡ COTA OUTROS (GPT / Claude):\n• GPT-4o\n• GPT-4o-mini\n• Claude 3.5 Sonnet\n• Claude 3.7 Sonnet\n• o3-mini\nCota unificada de modelos 3P.")
 
-        # 4. Argon (Pro) in-bar - Frame created, will be packed only if is_pro in update_card_in_place
+        # 4. Argon (Pro) in-bar - SEMPRE PRESENTE PARA PADRÃO DE TAMANHO 100% IDÊNTICO
         argon_row = tk.Frame(bars_container, bg=card_bg)
+        argon_row.pack(fill="x", pady=1)
         argon_bar = self.create_compact_bargraph(argon_row)
         argon_bar["cv"].pack(fill="x", expand=True)
-        ToolTip(argon_bar["cv"], "✦ COTA ARGON (Plano Pro Pago):\n• Argon Advanced Reasoning\n• Google DeepMind Frontier\nExclusivo da conta Pro ativa.")
+        if not hasattr(self, "argon_tooltips"):
+            self.argon_tooltips = {}
+        self.argon_tooltips[key] = ToolTip(argon_bar["cv"], "✦ COTA ARGON (Plano Pro Pago)")
 
-        # Row 4: Expandable Drawer (Lista explicativa detalhada de modelos por cota)
+        # Row 4: Expandable Drawer (Lista explicativa detalhada de modelos por cota - idêntica em todos!)
         drawer = tk.Frame(card, bg=self.theme_colors.get("header_bg", "#0f172a"), bd=1, relief="solid",
                           highlightbackground=border_col, highlightthickness=1)
         
@@ -1479,10 +1482,13 @@ class DesktopWidget(tk.Tk):
         tk.Label(f_out_det, text="⚡ Outros:", font=self.get_font(7, "bold"), fg="#34d399", bg=drawer["bg"]).pack(side="left")
         tk.Label(f_out_det, text="GPT-4o • GPT-4o-mini • Claude 3.5/3.7 • o3-mini", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
 
-        # Seção Argon no Drawer (Frame created, packed conditionally if is_pro)
+        # Seção Argon no Drawer - SEMPRE PRESENTE PARA ALTURA IDÊNTICA
         f_arg_det = tk.Frame(drawer, bg=drawer["bg"])
-        tk.Label(f_arg_det, text="✦ Argon (Pro):", font=self.get_font(7, "bold"), fg="#c084fc", bg=drawer["bg"]).pack(side="left")
-        tk.Label(f_arg_det, text="Argon Reasoning • DeepMind Frontier", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
+        f_arg_det.pack(fill="x", padx=6, pady=2)
+        lbl_arg_title = tk.Label(f_arg_det, text="✦ Argon (Pro):", font=self.get_font(7, "bold"), fg="#c084fc", bg=drawer["bg"])
+        lbl_arg_title.pack(side="left")
+        lbl_arg_models = tk.Label(f_arg_det, text="Argon Reasoning • DeepMind Frontier", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"])
+        lbl_arg_models.pack(side="left", padx=4)
 
         if is_expanded:
             drawer.pack(fill="x", padx=8, pady=(2, 4))
@@ -1502,10 +1508,9 @@ class DesktopWidget(tk.Tk):
         btn_desktop.pack(side="left", padx=3)
 
         btn_activate = tk.Button(btn_box, text="Ativar", font=self.get_font(8, "bold"), fg="#a855f7", bg="#2e1065",
-                                 activebackground="#3b0764", activeforeground="#ffffff", bd=0, padx=5, pady=2, cursor="hand2",
+                                 activebackground="#3b0764", activeforeground="#ffffff", bd=0, padx=6, pady=2, cursor="hand2",
                                  command=lambda p=key: self.switch_profile_and_refresh(p))
-        if not is_active:
-            btn_activate.pack(side="right")
+        btn_activate.pack(side="right")
 
         card.bind("<Double-Button-1>", lambda e, p=key: open_cmd_for_profile(p))
 
@@ -1524,7 +1529,8 @@ class DesktopWidget(tk.Tk):
             "argon_row": argon_row,
             "argon_bar": argon_bar,
             "drawer": drawer,
-            "f_arg_det": f_arg_det,
+            "lbl_arg_title": lbl_arg_title,
+            "lbl_arg_models": lbl_arg_models,
             "btn_activate": btn_activate
         }
 
@@ -1624,19 +1630,22 @@ class DesktopWidget(tk.Tk):
         l_ot, r_ot = format_bar_texts("Outros (GPT/Claude)", used_ot, ot.get("reset_in_seconds", 0), "⚡ ")
         self.update_compact_bargraph(view["outros_bar"], used_ot, l_ot, r_ot, theme_color="#10b981", track_color="#064e3b")
 
-        # 4. Update Argon In-Bar (Packed only if is_pro)
+        # 4. Update Argon In-Bar (Atualizado de forma uniforme em todos os cartões)
         if is_pro:
-            if not view["argon_row"].winfo_ismapped():
-                view["argon_row"].pack(fill="x", pady=1)
             l_ar, r_ar = format_bar_texts("Argon (Pro)", used_ar, ar.get("reset_in_seconds", 0), "✦ ")
             self.update_compact_bargraph(view["argon_bar"], used_ar, l_ar, r_ar, theme_color="#c084fc", track_color="#3b0764")
-            if not view["f_arg_det"].winfo_ismapped():
-                view["f_arg_det"].pack(fill="x", padx=6, pady=2)
+            view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#c084fc")
+            view["lbl_arg_models"].config(text="Argon Reasoning • DeepMind Frontier", fg="#cbd5e1", font=self.get_font(7))
+            if hasattr(self, "argon_tooltips") and key in self.argon_tooltips:
+                self.argon_tooltips[key].text_func = "✦ COTA ARGON (Plano Pro Pago):\n• Argon Advanced Reasoning\n• Google DeepMind Frontier\nExclusivo da conta Pro ativa."
         else:
-            if view["argon_row"].winfo_ismapped():
-                view["argon_row"].pack_forget()
-            if view["f_arg_det"].winfo_ismapped():
-                view["f_arg_det"].pack_forget()
+            l_ar = "✦ Argon (Pro)  0.0%"
+            r_ar = "— Requer Plano Pro"
+            self.update_compact_bargraph(view["argon_bar"], 0.0, l_ar, r_ar, theme_color="#334155", track_color="#1e293b")
+            view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#64748b")
+            view["lbl_arg_models"].config(text="Disponível no Plano Pro pago", fg="#64748b", font=self.get_font(7, "italic"))
+            if hasattr(self, "argon_tooltips") and key in self.argon_tooltips:
+                self.argon_tooltips[key].text_func = "✦ COTA ARGON (Plano Pro Pago):\n• Não disponível neste perfil (Requer assinatura Pro)"
 
         # Update Drawer Visibility
         if is_expanded:
@@ -1646,13 +1655,13 @@ class DesktopWidget(tk.Tk):
             if view["drawer"].winfo_ismapped():
                 view["drawer"].pack_forget()
 
-        # Update Active tag & button
+        # Update Active tag & button (Preserva a simetria horizontal exata)
         if is_active:
             view["tag_lbl"].pack(side="left", padx=4)
-            view["btn_activate"].pack_forget()
+            view["btn_activate"].config(text="✓ Em Uso", bg="#064e3b", fg="#a7f3d0", state="disabled", cursor="arrow")
         else:
             view["tag_lbl"].pack_forget()
-            view["btn_activate"].pack(side="right")
+            view["btn_activate"].config(text="Ativar", bg="#2e1065", fg="#a855f7", state="normal", cursor="hand2")
 
     def get_ordered_enabled_profiles(self):
         profiles = pm.discover_profiles()
@@ -1683,6 +1692,13 @@ class DesktopWidget(tk.Tk):
             for child in self.grid_container.winfo_children():
                 child.destroy()
             self.card_views.clear()
+
+            # Configura uniformidade estrita de colunas e linhas para tamanho idêntico
+            for c in range(self.cols):
+                self.grid_container.grid_columnconfigure(c, weight=1, uniform="profile_cols")
+            total_rows = (len(active_keys) + self.cols - 1) // self.cols
+            for r in range(max(total_rows, 1)):
+                self.grid_container.grid_rowconfigure(r, weight=1, uniform="profile_rows")
 
             positions = self.config_data.get("profile_positions", {})
             for idx, key in enumerate(active_keys):
