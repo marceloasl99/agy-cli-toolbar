@@ -892,7 +892,7 @@ class SettingsDialog(tk.Toplevel):
             self.config_copy["columns"] = cols
 
             # Calculate optimal window dimensions incorporating zoom scale
-            card_h = 290 if self.default_expanded_var.get() else 225
+            card_h = 310 if self.default_expanded_var.get() else 225
             opt_w = min(max(int(round(cols * 350 * new_scale + 24)), 380), 2000)
             opt_h = min(max(int(round(rows * card_h * new_scale + 85)), 220), 1400)
             self.parent.geometry(f"{opt_w}x{opt_h}")
@@ -1308,7 +1308,7 @@ class DesktopWidget(tk.Tk):
         self.config_data["columns"] = cols
 
         scale = float(self.config_data.get("ui_scale", 1.20))
-        card_h = 290 if getattr(self, "all_expanded", False) else 225
+        card_h = 310 if getattr(self, "all_expanded", False) else 225
         opt_w = min(max(int(round(cols * 350 * scale + 24)), 380), 2000)
         opt_h = min(max(int(round(rows * card_h * scale + 85)), 220), 1400)
         self.geometry(f"{opt_w}x{opt_h}")
@@ -1626,13 +1626,13 @@ class DesktopWidget(tk.Tk):
         f_out_det = tk.Frame(drawer, bg=drawer["bg"])
         f_out_det.pack(fill="x", padx=6, pady=2)
         tk.Label(f_out_det, text="⚡ GPT/Claude:", font=self.get_font(7, "bold"), fg="#34d399", bg=drawer["bg"]).pack(side="left")
-        tk.Label(f_out_det, text="Claude Sonnet 4.6 • Claude Opus 4.6 • GPT-OSS 120B", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
+        tk.Label(f_out_det, text="Claude Sonnet • Opus • GPT-OSS 120B", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
 
         # Seção Argon no Drawer - Empacotada apenas se is_pro for True
         f_arg_det = tk.Frame(drawer, bg=drawer["bg"])
         lbl_arg_title = tk.Label(f_arg_det, text="✦ Argon (Pro):", font=self.get_font(7, "bold"), fg="#c084fc", bg=drawer["bg"])
         lbl_arg_title.pack(side="left")
-        lbl_arg_models = tk.Label(f_arg_det, text="Gemini 4 Argon • Hydrogen • Neon • Orchestrator", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"])
+        lbl_arg_models = tk.Label(f_arg_det, text="Gemini 4 Argon • Hydrogen • Neon", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"])
         lbl_arg_models.pack(side="left", padx=4)
 
         if is_expanded:
@@ -1730,7 +1730,7 @@ class DesktopWidget(tk.Tk):
         email_str = mask_email(raw_email) if self.config_data.get("privacy_mode", False) else raw_email
         view["email_lbl"].config(text=email_str, bg=card_bg, font=self.get_font(8))
 
-        status_text = "✓ Conectado" if info.get("has_oauth") else "⚠️ Reautenticar"
+        status_text = "✓ Online" if info.get("has_oauth") else "⚠️ Reauth"
         status_col = "#22c55e" if info.get("has_oauth") else "#eab308"
         view["status_lbl"].config(text=status_text, fg=status_col, bg=card_bg, font=self.get_font(8, "bold"))
 
@@ -1815,7 +1815,7 @@ class DesktopWidget(tk.Tk):
             if not view["f_arg_det"].winfo_ismapped():
                 view["f_arg_det"].pack(fill="x", padx=6, pady=2)
             view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#c084fc")
-            view["lbl_arg_models"].config(text="Gemini 4 Argon • Hydrogen • Neon • Orchestrator", fg="#cbd5e1", font=self.get_font(7))
+            view["lbl_arg_models"].config(text="Gemini 4 Argon • Hydrogen • Neon", fg="#cbd5e1", font=self.get_font(7))
             rsta = pm.format_countdown(ar.get("reset_in_seconds", 0))
             if hasattr(self, "argon_tooltips") and key in self.argon_tooltips:
                 self.argon_tooltips[key].text_func = (
