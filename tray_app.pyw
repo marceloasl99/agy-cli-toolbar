@@ -114,8 +114,8 @@ THEMES = {
 DEFAULT_WIDGET_CONFIG = {
     "x": 100,
     "y": 100,
-    "width": 740,
-    "height": 480,
+    "width": 680,
+    "height": 370,
     "always_on_top": True,
     "visible": True,
     "locked": False,
@@ -125,14 +125,20 @@ DEFAULT_WIDGET_CONFIG = {
     "opacity": 0.96,
     "theme": "Dark Slate",
     "privacy_mode": False,
-    "card_density": "detailed",
+    "card_density": "compact",
     "alert_threshold": 85,
     "show_free_pct": True,
     "show_countdown": True,
     "enabled_profiles": {},
     "profile_order": [],
     "profile_nicknames": {},
-    "profile_positions": {}
+    "profile_positions": {},
+    "profile_models": {
+        "perfil1": ["Gemini 2.5 Pro", "GPT-4o"],
+        "perfil2": ["Gemini 2.5 Pro"],
+        "perfil3": ["Gemini 2.5 Pro", "GPT-4o"],
+        "perfil4": ["Argon", "GPT-4o", "Gemini 2.5 Pro"]
+    }
 }
 
 def load_widget_config():
@@ -468,6 +474,7 @@ class SettingsDialog(tk.Toplevel):
         tk.Button(f_btns, text="▲ Subir", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#334155", bd=0, padx=12, pady=4, cursor="hand2", command=self.move_prof_up).pack(fill="x", pady=2)
         tk.Button(f_btns, text="▼ Descer", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#334155", bd=0, padx=12, pady=4, cursor="hand2", command=self.move_prof_down).pack(fill="x", pady=2)
         tk.Button(f_btns, text="👁 Toggle Visível", font=("Segoe UI", 8, "bold"), fg="#38bdf8", bg="#0c4a6e", bd=0, padx=12, pady=4, cursor="hand2", command=self.toggle_prof_enable).pack(fill="x", pady=(8, 2))
+        tk.Button(f_btns, text="🤖 Modelos da Conta", font=("Segoe UI", 8, "bold"), fg="#34d399", bg="#064e3b", bd=0, padx=12, pady=4, cursor="hand2", command=self.edit_profile_models).pack(fill="x", pady=2)
         tk.Button(f_btns, text="✏️ Renomear Apelido", font=("Segoe UI", 8), fg="#e2e8f0", bg="#1e293b", bd=0, padx=12, pady=4, cursor="hand2", command=self.rename_profile_nickname).pack(fill="x", pady=2)
         tk.Button(f_btns, text="📂 Abrir Pasta", font=("Segoe UI", 8), fg="#e2e8f0", bg="#1e293b", bd=0, padx=12, pady=4, cursor="hand2", command=self.open_selected_profile_folder).pack(fill="x", pady=2)
         tk.Button(f_btns, text="➕ Novo Perfil...", font=("Segoe UI", 8, "bold"), fg="#a855f7", bg="#2e1065", bd=0, padx=12, pady=5, cursor="hand2", command=self.prompt_new_profile_dialog).pack(fill="x", pady=(12, 2))
@@ -479,6 +486,7 @@ class SettingsDialog(tk.Toplevel):
         all_profiles = pm.discover_profiles()
         en_dict = self.config_copy.get("enabled_profiles", {})
         nicknames = self.config_copy.get("profile_nicknames", {})
+        prof_models = self.config_copy.get("profile_models", {})
 
         for k in self.ordered_keys:
             is_en = en_dict.get(k, True)
@@ -488,7 +496,30 @@ class SettingsDialog(tk.Toplevel):
             cmd = get_profile_cli_command(k)
             info = pm.get_profile_info(prof)
             email = info.get("email", "Sem conta")
-            self.prof_listbox.insert(tk.END, f" {mark}  {disp}  [{cmd}]  —  {email}")
+            models = prof_models.get(k) or info.get("models", [])
+            m_str = f" [{', '.join(models)}]" if models else ""
+            self.prof_listbox.insert(tk.END, f" {mark}  {disp}  [{cmd}]  —  {email}{m_str}")
+
+    def edit_profile_models(self):
+        sel = self.prof_listbox.curselection()
+        if not sel:
+            return
+        k = self.ordered_keys[sel[0]]
+        prof_models_dict = self.config_copy.setdefault("profile_models", {})
+        current_models = prof_models_dict.get(k, [])
+        if not current_models:
+            all_profs = pm.discover_profiles()
+            info = pm.get_profile_info(all_profs.get(k, {}))
+            current_models = info.get("models", ["Gemini 2.5 Pro"])
+        current_str = ", ".join(current_models)
+        new_str = simpledialog.askstring("Modelos do Perfil",
+                                         f"Modelos suportados por {k} (separados por vírgula):\nEx: Argon, GPT-4o, Gemini 2.5 Pro",
+                                         initialvalue=current_str, parent=self)
+        if new_str is not None:
+            models_list = [m.strip() for m in new_str.split(",") if m.strip()]
+            prof_models_dict[k] = models_list
+            self.refresh_profile_listbox()
+            self.prof_listbox.selection_set(sel[0])
 
     def move_prof_up(self):
         sel = self.prof_listbox.curselection()
@@ -695,8 +726,8 @@ class SettingsDialog(tk.Toplevel):
             self.config_copy["columns"] = cols
 
             # Calculate optimal window dimensions
-            opt_w = min(max(cols * 350 + 20, 360), 1600)
-            opt_h = min(max(rows * 190 + 90, 240), 1000)
+            opt_w = min(max(cols * 330 + 20, 340), 1600)
+            opt_h = min(max(rows * 135 + 75, 180), 1000)
             self.parent.geometry(f"{opt_w}x{opt_h}")
             self.config_copy["width"] = opt_w
             self.config_copy["height"] = opt_h
@@ -924,8 +955,8 @@ class DesktopWidget(tk.Tk):
         self.config_data["grid_preset"] = new_preset
         self.config_data["columns"] = cols
 
-        opt_w = min(max(cols * 350 + 20, 360), 1600)
-        opt_h = min(max(rows * 190 + 90, 240), 1000)
+        opt_w = min(max(cols * 330 + 20, 340), 1600)
+        opt_h = min(max(rows * 135 + 75, 180), 1000)
         self.geometry(f"{opt_w}x{opt_h}")
         self.config_data["width"] = opt_w
         self.config_data["height"] = opt_h
@@ -952,18 +983,64 @@ class DesktopWidget(tk.Tk):
         else:
             self.show_widget()
 
-    def create_dual_progressbar(self, parent, width=200, height=8):
-        cv = tk.Canvas(parent, width=width, height=height, bg=self.theme_colors["bar_bg"], bd=0, highlightthickness=0)
+    def create_compact_bargraph(self, parent, height=18):
+        cv = tk.Canvas(parent, height=height, bg=self.theme_colors["bar_bg"], bd=0, highlightthickness=0)
+        track_id = cv.create_rectangle(0, 0, 10, height, fill=self.theme_colors["bar_bg"], width=0)
         fill_id = cv.create_rectangle(0, 0, 0, height, fill="#22c55e", width=0)
-        return cv, fill_id
+        left_id = cv.create_text(8, height // 2, text="", anchor="w", fill="#ffffff", font=("Segoe UI", 7, "bold"))
+        right_id = cv.create_text(10, height // 2, text="", anchor="e", fill="#ffffff", font=("Segoe UI", 7, "bold"))
+        bar_data = {
+            "cv": cv,
+            "track_id": track_id,
+            "fill_id": fill_id,
+            "left_id": left_id,
+            "right_id": right_id,
+            "height": height,
+            "pct": 0.0,
+            "left_text": "",
+            "right_text": "",
+            "fill_col": "#22c55e"
+        }
+        cv.bind("<Configure>", lambda e, d=bar_data: self.on_bar_configure(e, d))
+        return bar_data
 
-    def update_dual_progressbar(self, cv, fill_id, pct, width=200, height=8):
+    def on_bar_configure(self, event, d):
+        w = event.width
+        if w < 10:
+            return
+        h = d["height"]
+        fill_w = int((d["pct"] / 100.0) * w)
+        d["cv"].coords(d["track_id"], 0, 0, w, h)
+        d["cv"].coords(d["fill_id"], 0, 0, fill_w, h)
+        d["cv"].coords(d["left_id"], 8, h // 2)
+        d["cv"].coords(d["right_id"], w - 8, h // 2)
+
+    def update_compact_bargraph(self, d, pct, left_text, right_text):
         pct = min(max(pct, 0.0), 100.0)
-        fill_w = int((pct / 100.0) * width)
+        d["pct"] = pct
+        d["left_text"] = left_text
+        d["right_text"] = right_text
+
         thresh = self.config_data.get("alert_threshold", 85)
         col = "#22c55e" if pct < 60 else ("#eab308" if pct < thresh else "#ef4444")
-        cv.coords(fill_id, 0, 0, fill_w, height)
-        cv.itemconfig(fill_id, fill=col)
+        d["fill_col"] = col
+
+        w = d["cv"].winfo_width()
+        if w < 50:
+            w = 260
+        h = d["height"]
+        fill_w = int((pct / 100.0) * w)
+
+        d["cv"].coords(d["track_id"], 0, 0, w, h)
+        d["cv"].itemconfig(d["track_id"], fill=self.theme_colors["bar_bg"])
+        d["cv"].coords(d["fill_id"], 0, 0, fill_w, h)
+        d["cv"].itemconfig(d["fill_id"], fill=col)
+
+        d["cv"].coords(d["left_id"], 8, h // 2)
+        d["cv"].itemconfig(d["left_id"], text=left_text)
+
+        d["cv"].coords(d["right_id"], w - 8, h // 2)
+        d["cv"].itemconfig(d["right_id"], text=right_text)
 
     def build_profile_card(self, parent, key, prof, row, col):
         is_active = (key == pm.get_active_profile())
@@ -972,12 +1049,12 @@ class DesktopWidget(tk.Tk):
         border_col = th["card_active_border"] if is_active else th["card_border"]
 
         card = tk.Frame(parent, bg=card_bg, bd=1, relief="solid", highlightbackground=border_col, highlightthickness=1)
-        card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+        card.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
         parent.grid_columnconfigure(col, weight=1)
 
-        # Header Row
+        # Row 1: Header Row (Dot + Name + Command + ATIVO Tag + Status + Arrows)
         row_top = tk.Frame(card, bg=card_bg)
-        row_top.pack(fill="x", padx=8, pady=(6, 2))
+        row_top.pack(fill="x", padx=8, pady=(4, 1))
 
         dot_lbl = tk.Label(row_top, text="●", font=("Segoe UI", 9), fg="#22c55e" if is_active else "#64748b", bg=card_bg)
         dot_lbl.pack(side="left", padx=(0, 4))
@@ -986,85 +1063,71 @@ class DesktopWidget(tk.Tk):
         nicknames = self.config_data.get("profile_nicknames", {})
         display_name = nicknames.get(key) or prof.get("display", key.upper())
 
-        name_lbl = tk.Label(row_top, text=f"{display_name} ({cmd_name})", font=("Segoe UI", 9, "bold"),
+        name_lbl = tk.Label(row_top, text=f"{display_name} ({cmd_name})", font=("Segoe UI", 8, "bold"),
                             fg=th["accent"] if is_active else th["text"], bg=card_bg)
         name_lbl.pack(side="left")
 
-        tag_lbl = tk.Label(row_top, text="ATIVO", font=("Segoe UI", 7, "bold"), fg=th["tag_fg"], bg=th["tag_bg"], padx=4, pady=0)
+        tag_lbl = tk.Label(row_top, text="ATIVO", font=("Segoe UI", 6, "bold"), fg=th["tag_fg"], bg=th["tag_bg"], padx=3, pady=0)
         if is_active:
-            tag_lbl.pack(side="left", padx=5)
+            tag_lbl.pack(side="left", padx=4)
 
-        # Reorder Arrows (◀ / ▶)
-        reorder_box = tk.Frame(row_top, bg=card_bg)
-        reorder_box.pack(side="right")
+        # Right box: Status and Reorder buttons
+        top_right = tk.Frame(row_top, bg=card_bg)
+        top_right.pack(side="right")
 
-        btn_left = tk.Label(reorder_box, text="◀", font=("Segoe UI", 8), fg="#64748b", bg=card_bg, cursor="hand2")
+        status_lbl = tk.Label(top_right, text="", font=("Segoe UI", 7, "bold"), fg="#22c55e", bg=card_bg)
+        status_lbl.pack(side="left", padx=(0, 4))
+
+        btn_left = tk.Label(top_right, text="◀", font=("Segoe UI", 8), fg="#64748b", bg=card_bg, cursor="hand2")
         btn_left.pack(side="left", padx=1)
         btn_left.bind("<Button-1>", lambda e, p=key: self.shift_profile_order(p, -1))
 
-        btn_right = tk.Label(reorder_box, text="▶", font=("Segoe UI", 8), fg="#64748b", bg=card_bg, cursor="hand2")
+        btn_right = tk.Label(top_right, text="▶", font=("Segoe UI", 8), fg="#64748b", bg=card_bg, cursor="hand2")
         btn_right.pack(side="left", padx=1)
         btn_right.bind("<Button-1>", lambda e, p=key: self.shift_profile_order(p, 1))
 
-        # Email & Status Row
-        row_email = tk.Frame(card, bg=card_bg)
-        row_email.pack(fill="x", padx=8, pady=(0, 4))
+        # Row 2: Email & Model Badges Row
+        row_meta = tk.Frame(card, bg=card_bg)
+        row_meta.pack(fill="x", padx=8, pady=(0, 3))
 
-        email_lbl = tk.Label(row_email, text="Carregando...", font=("Segoe UI", 8), fg=th["text_muted"], bg=card_bg)
+        email_lbl = tk.Label(row_meta, text="Carregando...", font=("Segoe UI", 7), fg=th["text_muted"], bg=card_bg)
         email_lbl.pack(side="left")
 
-        status_lbl = tk.Label(row_email, text="", font=("Segoe UI", 7, "bold"), fg="#22c55e", bg=card_bg)
-        status_lbl.pack(side="right")
+        models_box = tk.Frame(row_meta, bg=card_bg)
+        models_box.pack(side="right")
 
-        # Quota 5h Container
-        q5_box = tk.Frame(card, bg=card_bg)
-        q5_box.pack(fill="x", padx=8, pady=(2, 1))
+        # Row 3: Quota 5h Compact In-Bar Bargraph
+        q5_row = tk.Frame(card, bg=card_bg)
+        q5_row.pack(fill="x", padx=8, pady=(1, 2))
+        q5_bar = self.create_compact_bargraph(q5_row, height=17)
+        q5_bar["cv"].pack(fill="x", expand=True)
 
-        q5_lbl = tk.Label(q5_box, text="5h: 0.0% usada │ 100.0% livre", font=("Segoe UI", 8), fg=th["text"], bg=card_bg, anchor="w")
-        q5_lbl.pack(fill="x")
+        # Row 4: Quota 7d Compact In-Bar Bargraph
+        qw_row = tk.Frame(card, bg=card_bg)
+        qw_row.pack(fill="x", padx=8, pady=(1, 3))
+        qw_bar = self.create_compact_bargraph(qw_row, height=17)
+        qw_bar["cv"].pack(fill="x", expand=True)
 
-        q5_bar_row = tk.Frame(card, bg=card_bg)
-        q5_bar_row.pack(fill="x", padx=8, pady=(1, 2))
-        q5_cv, q5_fill_id = self.create_dual_progressbar(q5_bar_row, width=200, height=8)
-        q5_cv.pack(side="left", fill="x", expand=True)
-        q5_rst_lbl = tk.Label(q5_bar_row, text="reset: --", font=("Segoe UI", 7), fg="#64748b", bg=card_bg)
-        q5_rst_lbl.pack(side="right", padx=(4, 0))
-
-        # Quota 7d Container
-        qw_box = tk.Frame(card, bg=card_bg)
-        qw_box.pack(fill="x", padx=8, pady=(2, 1))
-
-        qw_lbl = tk.Label(qw_box, text="7d: 0.0% usada │ 100.0% livre", font=("Segoe UI", 8), fg=th["text"], bg=card_bg, anchor="w")
-        qw_lbl.pack(fill="x")
-
-        qw_bar_row = tk.Frame(card, bg=card_bg)
-        qw_bar_row.pack(fill="x", padx=8, pady=(1, 4))
-        qw_cv, qw_fill_id = self.create_dual_progressbar(qw_bar_row, width=200, height=8)
-        qw_cv.pack(side="left", fill="x", expand=True)
-        qw_rst_lbl = tk.Label(qw_bar_row, text="reset: --", font=("Segoe UI", 7), fg="#64748b", bg=card_bg)
-        qw_rst_lbl.pack(side="right", padx=(4, 0))
-
-        # Action Buttons Row
+        # Row 5: Action Buttons Row (Ultra-compact)
         btn_box = tk.Frame(card, bg=card_bg)
-        btn_box.pack(fill="x", padx=8, pady=(4, 6))
+        btn_box.pack(fill="x", padx=8, pady=(2, 4))
 
-        btn_cmd = tk.Button(btn_box, text=f"⚡ Abrir CMD ({cmd_name})", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#0284c7",
-                            activebackground="#0369a1", activeforeground="#ffffff", bd=0, padx=8, pady=3, cursor="hand2",
+        btn_cmd = tk.Button(btn_box, text=f"⚡ CLI ({cmd_name})", font=("Segoe UI", 7, "bold"), fg="#ffffff", bg="#0284c7",
+                            activebackground="#0369a1", activeforeground="#ffffff", bd=0, padx=6, pady=2, cursor="hand2",
                             command=lambda p=key: open_cmd_for_profile(p))
         btn_cmd.pack(side="left")
 
-        btn_desktop = tk.Button(btn_box, text="🖥️ Desktop", font=("Segoe UI", 8), fg="#cbd5e1", bg="#334155",
-                                activebackground="#475569", activeforeground="#ffffff", bd=0, padx=6, pady=3, cursor="hand2",
+        btn_desktop = tk.Button(btn_box, text="🖥️ Desktop", font=("Segoe UI", 7), fg="#cbd5e1", bg="#334155",
+                                activebackground="#475569", activeforeground="#ffffff", bd=0, padx=5, pady=2, cursor="hand2",
                                 command=lambda p=key: pm.cmd_desktop(p))
-        btn_desktop.pack(side="left", padx=4)
+        btn_desktop.pack(side="left", padx=3)
 
-        btn_activate = tk.Button(btn_box, text="Ativar", font=("Segoe UI", 8), fg="#a855f7", bg="#2e1065",
-                                 activebackground="#3b0764", activeforeground="#ffffff", bd=0, padx=6, pady=3, cursor="hand2",
+        btn_activate = tk.Button(btn_box, text="Ativar", font=("Segoe UI", 7), fg="#a855f7", bg="#2e1065",
+                                 activebackground="#3b0764", activeforeground="#ffffff", bd=0, padx=5, pady=2, cursor="hand2",
                                  command=lambda p=key: self.switch_profile_and_refresh(p))
         if not is_active:
             btn_activate.pack(side="right")
 
-        # Double-click anywhere on card opens CMD
         card.bind("<Double-Button-1>", lambda e, p=key: open_cmd_for_profile(p))
 
         self.card_views[key] = {
@@ -1074,14 +1137,9 @@ class DesktopWidget(tk.Tk):
             "tag_lbl": tag_lbl,
             "email_lbl": email_lbl,
             "status_lbl": status_lbl,
-            "q5_lbl": q5_lbl,
-            "q5_cv": q5_cv,
-            "q5_fill_id": q5_fill_id,
-            "q5_rst_lbl": q5_rst_lbl,
-            "qw_lbl": qw_lbl,
-            "qw_cv": qw_cv,
-            "qw_fill_id": qw_fill_id,
-            "qw_rst_lbl": qw_rst_lbl,
+            "models_box": models_box,
+            "q5_bar": q5_bar,
+            "qw_bar": qw_bar,
             "btn_activate": btn_activate
         }
 
@@ -1131,34 +1189,66 @@ class DesktopWidget(tk.Tk):
         status_col = "#22c55e" if info.get("has_oauth") else "#eab308"
         view["status_lbl"].config(text=status_text, fg=status_col, bg=card_bg)
 
-        # 5h Quota
+        # Update Model Badges (Argon, GPT, Gemini, Claude, etc.)
+        for w in view["models_box"].winfo_children():
+            w.destroy()
+
+        profile_models = self.config_data.get("profile_models", {})
+        models = profile_models.get(key) or info.get("models") or []
+        if not models:
+            if key == "perfil4":
+                models = ["Argon", "GPT-4o", "Gemini 2.5 Pro"]
+            elif key == "perfil1":
+                models = ["Gemini 2.5 Pro", "GPT-4o"]
+            elif key == "perfil2":
+                models = ["Gemini 2.5 Pro"]
+            else:
+                models = ["Gemini 2.5 Pro", "GPT-4o"]
+
+        for m in models:
+            m_lower = m.lower()
+            if "argon" in m_lower:
+                m_bg, m_fg, m_border, m_icon = "#3b0764", "#e9d5ff", "#9333ea", "✦ "
+            elif "gpt" in m_lower or "openai" in m_lower:
+                m_bg, m_fg, m_border, m_icon = "#064e3b", "#a7f3d0", "#059669", "⚡ "
+            elif "claude" in m_lower:
+                m_bg, m_fg, m_border, m_icon = "#451a03", "#fed7aa", "#d97706", "✻ "
+            else:
+                m_bg, m_fg, m_border, m_icon = "#172554", "#bfdbfe", "#2563eb", "★ "
+
+            pill = tk.Label(view["models_box"], text=f"{m_icon}{m}", font=("Segoe UI", 6, "bold"),
+                            fg=m_fg, bg=m_bg, bd=1, relief="solid", highlightbackground=m_border, highlightthickness=1,
+                            padx=3, pady=0)
+            pill.pack(side="left", padx=(0, 2))
+
+        # 5h Quota in-bar update
         rem_5h = max(100.0 - used_5h, 0.0)
         rst_5h = pm.format_countdown(q5.get("reset_in_seconds", 0))
-
+        left_5h = f"⏳ 5h  {used_5h:4.1f}%"
         if self.config_data.get("show_free_pct", True):
-            q5_text = f"5h: {used_5h:4.1f}% usada │ {rem_5h:4.1f}% livre"
+            right_5h = f"{rem_5h:4.1f}% livre"
+            if self.config_data.get("show_countdown", True) and rst_5h != "pronto":
+                right_5h += f" • {rst_5h}"
         else:
-            q5_text = f"5h: {used_5h:4.1f}% utilizada"
+            right_5h = f"reset {rst_5h}" if self.config_data.get("show_countdown", True) else ""
 
-        view["q5_lbl"].config(text=q5_text, bg=card_bg)
-        self.update_dual_progressbar(view["q5_cv"], view["q5_fill_id"], used_5h, width=200, height=8)
-        view["q5_rst_lbl"].config(text=f"reset: {rst_5h}" if self.config_data.get("show_countdown", True) else "", bg=card_bg)
+        self.update_compact_bargraph(view["q5_bar"], used_5h, left_5h, right_5h)
 
-        # 7d Quota
+        # 7d Quota in-bar update
         rem_w = max(100.0 - used_w, 0.0)
         rst_w = pm.format_countdown(qw.get("reset_in_seconds", 0))
-
+        left_w = f"📅 7d  {used_w:4.1f}%"
         if self.config_data.get("show_free_pct", True):
-            qw_text = f"7d: {used_w:4.1f}% usada │ {rem_w:4.1f}% livre"
+            right_w = f"{rem_w:4.1f}% livre"
+            if self.config_data.get("show_countdown", True) and rst_w != "pronto":
+                right_w += f" • {rst_w}"
         else:
-            qw_text = f"7d: {used_w:4.1f}% utilizada"
+            right_w = f"reset {rst_w}" if self.config_data.get("show_countdown", True) else ""
 
-        view["qw_lbl"].config(text=qw_text, bg=card_bg)
-        self.update_dual_progressbar(view["qw_cv"], view["qw_fill_id"], used_w, width=200, height=8)
-        view["qw_rst_lbl"].config(text=f"reset: {rst_w}" if self.config_data.get("show_countdown", True) else "", bg=card_bg)
+        self.update_compact_bargraph(view["qw_bar"], used_w, left_w, right_w)
 
         if is_active:
-            view["tag_lbl"].pack(side="left", padx=5)
+            view["tag_lbl"].pack(side="left", padx=4)
             view["btn_activate"].pack_forget()
         else:
             view["tag_lbl"].pack_forget()

@@ -234,9 +234,30 @@ def get_profile_info(prof):
         except Exception:
             pass
 
+    # Read Models Configuration
+    models = []
+    widget_conf_file = os.path.join(CUSTOM_DIR, "widget_config.json")
+    if os.path.exists(widget_conf_file):
+        try:
+            with open(widget_conf_file, "r", encoding="utf-8") as f:
+                w_conf = json.load(f)
+                models = w_conf.get("profile_models", {}).get(prof["name"], [])
+        except Exception:
+            pass
+    if not models:
+        if prof["name"] == "perfil4":
+            models = ["Argon", "GPT-4o", "Gemini 2.5 Pro"]
+        elif prof["name"] == "perfil1":
+            models = ["Gemini 2.5 Pro", "GPT-4o"]
+        elif prof["name"] == "perfil2":
+            models = ["Gemini 2.5 Pro"]
+        else:
+            models = ["Gemini 2.5 Pro", "GPT-4o"]
+
     return {
         "email": email,
         "has_oauth": has_oauth,
+        "models": models,
         "quota_5h": quotas.get("quota_5h"),
         "quota_weekly": quotas.get("quota_weekly"),
         "quota_updated": quotas.get("updated_at")
@@ -282,6 +303,9 @@ def cmd_list():
         
         print(f" {active_tag} {BOLD}[{i}] {prof['display']}{RESET}  {GRAY}(id: {key}){RESET}")
         print(f"     👤 Conta: {CYAN}{info['email']}{RESET}  │  Status: {status_tag}")
+        models_str = " ".join([f"{MAGENTA}[{m}]{RESET}" for m in info.get("models", [])])
+        if models_str:
+            print(f"     🤖 Modelos: {models_str}")
         
         # 5h Quota
         q5h = info["quota_5h"]
