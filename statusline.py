@@ -344,10 +344,29 @@ def calculate_cost(model_name, in_tokens, out_tokens, cached_tokens=0):
     return cost, savings
 
 def parse_quota(quota_dict, rate_limits_dict, keys):
-    for k in keys:
-        if k in quota_dict:
-            q = quota_dict[k]
-            if isinstance(q, dict):
+    def _extract_from_dict(src_dict):
+        # 1. Exact key match
+        for k in keys:
+            if k in src_dict:
+                q = src_dict[k]
+                if isinstance(q, dict):
+                    rem_fraction = q.get("remaining_fraction")
+                    reset_sec = q.get("reset_in_seconds", 0)
+                    reset_time = q.get("reset_time", "")
+                    if rem_fraction is not None:
+                        rem_pct = rem_fraction * 100.0
+                        used_pct = 100.0 - rem_pct
+                        return (used_pct, rem_pct, reset_sec, reset_time)
+                    if "used_percentage" in q:
+                        used_pct = q.get("used_percentage", 0.0)
+                        rem_pct = 100.0 - used_pct
+                        return (used_pct, rem_pct, reset_sec, reset_time)
+        # 2. Substring fallback match (case-insensitive)
+        for src_k, q in src_dict.items():
+            if not isinstance(q, dict):
+                continue
+            sk_low = str(src_k).lower()
+            if any(k.lower() in sk_low for k in keys):
                 rem_fraction = q.get("remaining_fraction")
                 reset_sec = q.get("reset_in_seconds", 0)
                 reset_time = q.get("reset_time", "")
@@ -355,18 +374,16 @@ def parse_quota(quota_dict, rate_limits_dict, keys):
                     rem_pct = rem_fraction * 100.0
                     used_pct = 100.0 - rem_pct
                     return (used_pct, rem_pct, reset_sec, reset_time)
+                if "used_percentage" in q:
+                    used_pct = q.get("used_percentage", 0.0)
+                    rem_pct = 100.0 - used_pct
+                    return (used_pct, rem_pct, reset_sec, reset_time)
+        return None
 
-    for k in keys:
-        if k in rate_limits_dict:
-            rl = rate_limits_dict[k]
-            if isinstance(rl, dict):
-                used_pct = rl.get("used_percentage", 0.0)
-                reset_sec = rl.get("reset_in_seconds", 0)
-                reset_time = rl.get("reset_time", "")
-                rem_pct = 100.0 - used_pct
-                return (used_pct, rem_pct, reset_sec, reset_time)
-
-    return None
+    res = _extract_from_dict(quota_dict)
+    if res:
+        return res
+    return _extract_from_dict(rate_limits_dict)
 
 def get_active_profile_name(email=None):
     env_p = os.environ.get("AGY_PROFILE") or os.environ.get("ANTIGRAVITY_PROFILE")
@@ -718,9 +735,25 @@ def main():
                 line2_items.append(burn_tag)
 
         # Active Profile & Quota Cache Sync
+        if os.environ.get("STATUSLINE_DEBUG") == "1":
+            try:
+                payload_dump_file = os.path.join(CUSTOM_DIR, "last_quota_payload.json")
+                os.makedirs(CUSTOM_DIR, exist_ok=True)
+                with open(payload_dump_file, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "updated_at": datetime.datetime.now().isoformat(),
+                        "email": email,
+                        "plan_tier": plan_tier,
+                        "model": model_info,
+                        "quota": quota,
+                        "rate_limits": rate_limits
+                    }, f, indent=2)
+            except Exception:
+                pass
+
         active_prof = get_active_profile_name(email)
-        argon_q = parse_quota(quota, rate_limits, ["argon", "argon-5h", "gemini-4-argon", "gemini-argon"])
-        outros_q = parse_quota(quota, rate_limits, ["3p-5h", "3p", "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b", "claude", "third_party", "outros"])
+        argon_q = parse_quota(quota, rate_limits, ["gemini-argon-wtu-weekly", "gemini-argon", "argon-5h", "argon", "g1-pro"])
+        outros_q = parse_quota(quota, rate_limits, ["3p-5h", "3p-weekly", "3p", "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b", "claude", "third_party", "outros"])
         save_profile_quota(active_prof, email, quota_5h, quota_weekly, quota_outros=outros_q, quota_argon=argon_q)
 
         # Account / Email, Profile & Plan Tier

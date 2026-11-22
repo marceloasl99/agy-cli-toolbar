@@ -958,6 +958,7 @@ class DesktopWidget(tk.Tk):
         self.cols = self.config_data.get("columns", 2)
         self.card_views = {}
         self.known_profiles_signature = ""
+        self.last_quotas_mtime = 0.0
         self.expanded_cards = {}
         self.all_expanded = self.config_data.get("default_expanded", False)
 
@@ -998,6 +999,7 @@ class DesktopWidget(tk.Tk):
 
         self.refresh_profiles(force=True)
         self.schedule_next_refresh()
+        self.schedule_fast_quota_watch()
 
     def get_theme(self):
         return THEMES.get(self.config_data.get("theme", "Dark Slate"), THEMES["Dark Slate"])
@@ -1630,7 +1632,7 @@ class DesktopWidget(tk.Tk):
         f_arg_det = tk.Frame(drawer, bg=drawer["bg"])
         lbl_arg_title = tk.Label(f_arg_det, text="✦ Argon (Pro):", font=self.get_font(7, "bold"), fg="#c084fc", bg=drawer["bg"])
         lbl_arg_title.pack(side="left")
-        lbl_arg_models = tk.Label(f_arg_det, text="Gemini 4 Argon (Low • Medium • High)", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"])
+        lbl_arg_models = tk.Label(f_arg_det, text="Gemini 4 Argon • Hydrogen • Neon • Orchestrator", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"])
         lbl_arg_models.pack(side="left", padx=4)
 
         if is_expanded:
@@ -1813,15 +1815,16 @@ class DesktopWidget(tk.Tk):
             if not view["f_arg_det"].winfo_ismapped():
                 view["f_arg_det"].pack(fill="x", padx=6, pady=2)
             view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#c084fc")
-            view["lbl_arg_models"].config(text="Gemini 4 Argon (Low • Medium • High)", fg="#cbd5e1", font=self.get_font(7))
+            view["lbl_arg_models"].config(text="Gemini 4 Argon • Hydrogen • Neon • Orchestrator", fg="#cbd5e1", font=self.get_font(7))
             rsta = pm.format_countdown(ar.get("reset_in_seconds", 0))
             if hasattr(self, "argon_tooltips") and key in self.argon_tooltips:
                 self.argon_tooltips[key].text_func = (
-                    f"✦ COTA ARGON — Plano Pro Pago ({100.0 - used_ar:.1f}% livre • reset: {rsta})\n"
+                    f"✦ COTA ARGON (WTU Weekly) — Plano Pro Pago ({100.0 - used_ar:.1f}% livre • reset: {rsta})\n"
                     "Modelos exatos incluídos:\n"
-                    "• Gemini 4 Argon (Low)\n"
-                    "• Gemini 4 Argon (Medium)\n"
-                    "• Gemini 4 Argon (High)"
+                    "• Gemini 4 Argon (Low / Medium / High)\n"
+                    "• Gemini 4 Hydrogen (Low / Medium / High / XHigh)\n"
+                    "• Gemini 4 Neon (Low / Medium / High / XHigh)\n"
+                    "• Orchestrator (Neon / Argon)"
                 )
         else:
             # Esconde completamente a barra do Argon e os detalhes nos planos padrão sem Argon!
@@ -1975,6 +1978,21 @@ class DesktopWidget(tk.Tk):
 
         tk.Button(win, text="Criar Perfil", font=("Segoe UI", 9, "bold"), fg="#ffffff", bg="#0284c7",
                   activebackground="#0369a1", bd=0, padx=14, pady=6, cursor="hand2", command=on_create).pack(pady=14)
+
+    def schedule_fast_quota_watch(self):
+        self.after(2000, self.on_fast_quota_watch)
+
+    def on_fast_quota_watch(self):
+        try:
+            q_file = pm.QUOTAS_CACHE_FILE
+            if os.path.exists(q_file):
+                mt = os.path.getmtime(q_file)
+                if mt != self.last_quotas_mtime:
+                    self.last_quotas_mtime = mt
+                    self.refresh_profiles(force=False)
+        except Exception:
+            pass
+        self.schedule_fast_quota_watch()
 
     def schedule_next_refresh(self):
         sec = self.config_data.get("refresh_seconds", 15)

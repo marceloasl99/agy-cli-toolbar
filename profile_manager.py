@@ -179,9 +179,10 @@ OUTROS_MODELS = [
     "GPT-OSS 120B (Medium)",
 ]
 ARGON_MODELS = [
-    "Gemini 4 Argon (Low)",
-    "Gemini 4 Argon (Medium)",
-    "Gemini 4 Argon (High)",
+    "Gemini 4 Argon (Low / Medium / High)",
+    "Gemini 4 Hydrogen (Low / Medium / High / XHigh)",
+    "Gemini 4 Neon (Low / Medium / High / XHigh)",
+    "Orchestrator (Neon / Argon)",
 ]
 
 def get_profile_info(prof):
@@ -377,7 +378,7 @@ def cmd_list():
             else:
                 bar_empty_a = make_mini_bar(0.0, length=14)
                 print(f"     ✦ Argon (Pro)  : [{bar_empty_a}] {GREEN} 0.0%{RESET} {GRAY}(disponível){RESET}")
-            print(f"        {GRAY}↳ Modelos Argon     :{RESET} {MAGENTA}Gemini 4 Argon (Low, Medium, High){RESET}")
+            print(f"        {GRAY}↳ Modelos Argon     :{RESET} {MAGENTA}Gemini 4 Argon / Hydrogen / Neon, Orchestrator{RESET}")
         
         print(f"     📁 Pasta: {GRAY}{prof['root']}{RESET}\n")
 
