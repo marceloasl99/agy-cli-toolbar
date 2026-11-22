@@ -1376,7 +1376,6 @@ def enforce_single_instance_or_wake():
     """
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_sock.bind(("127.0.0.1", SINGLE_INSTANCE_PORT))
         server_sock.listen(5)
         return server_sock
@@ -1388,10 +1387,9 @@ def enforce_single_instance_or_wake():
             client.connect(("127.0.0.1", SINGLE_INSTANCE_PORT))
             client.sendall(b"SHOW\n")
             client.close()
-            sys.exit(0)
         except Exception:
             pass
-        return None
+        sys.exit(0)
 
 if __name__ == "__main__":
     try:

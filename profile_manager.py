@@ -9,12 +9,13 @@ import datetime
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-USER_HOME = os.path.expanduser("~")
+USER_HOME = r"C:\Users\ma038"
 PROFILES_BASE_DIR = os.path.join(USER_HOME, ".agy-perfis")
 CUSTOM_DIR = os.path.join(USER_HOME, ".antigravity-custom")
 ACTIVE_PROFILE_FILE = os.path.join(CUSTOM_DIR, "active_profile.json")
 QUOTAS_CACHE_FILE = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
 AGY_BIN_DIR = r"C:\Users\ma038\AppData\Local\agy\bin"
+CUSTOM_BIN_DIR = os.path.join(CUSTOM_DIR, "bin")
 DESKTOP_EXE = r"C:\Users\ma038\AppData\Local\Programs\antigravity\Antigravity.exe"
 
 # ANSI Colors
@@ -128,21 +129,31 @@ def set_active_profile(profile_name):
 
 def discover_profiles():
     """Discovers all profiles on the system."""
-    profiles = {
-        "perfil1": {
+    profiles = {}
+    p1_dir = os.path.join(PROFILES_BASE_DIR, "perfil1")
+    if os.path.exists(p1_dir):
+        profiles["perfil1"] = {
+            "name": "perfil1",
+            "display": "Perfil 1 (Principal)",
+            "root": p1_dir,
+            "gemini_dir": os.path.join(p1_dir, ".gemini"),
+            "is_default": True
+        }
+    else:
+        profiles["perfil1"] = {
             "name": "perfil1",
             "display": "Perfil 1 (Principal)",
             "root": USER_HOME,
             "gemini_dir": os.path.join(USER_HOME, ".gemini"),
             "is_default": True
         }
-    }
 
     if os.path.exists(PROFILES_BASE_DIR):
         for item in sorted(os.listdir(PROFILES_BASE_DIR)):
+            if item == "perfil1":
+                continue
             full_path = os.path.join(PROFILES_BASE_DIR, item)
             if os.path.isdir(full_path):
-                # Accept folders starting with 'perfil' (e.g. perfil2, perfil3, perfil4)
                 if not item.startswith("perfil"):
                     continue
                 num_part = item[6:]
@@ -165,7 +176,7 @@ def get_profile_info(prof):
     email = "Desconhecido"
     has_oauth = False
 
-    # 1. Prefer wincred.json (stores Antigravity native session token & email)
+    # 1. Prefer profile's own wincred.json
     if os.path.exists(wincred_file):
         try:
             with open(wincred_file, "r", encoding="utf-8") as f:
@@ -175,7 +186,7 @@ def get_profile_info(prof):
         except Exception:
             pass
 
-    # 2. Check accounts file
+    # 2. Check profile's google_accounts.json
     if email == "Desconhecido" and os.path.exists(accounts_file):
         try:
             with open(accounts_file, "r", encoding="utf-8") as f:
@@ -184,7 +195,7 @@ def get_profile_info(prof):
         except Exception:
             pass
 
-    # 3. Check oauth_creds file
+    # 3. Check profile's oauth_creds.json
     if os.path.exists(oauth_file):
         has_oauth = True
         if email == "Desconhecido":
@@ -201,14 +212,17 @@ def get_profile_info(prof):
             except Exception:
                 pass
 
-    # 4. If still unknown and this is the active profile, check live Windows Credential Manager
-    if email == "Desconhecido" and prof["name"] == get_active_profile():
-        live_cred = read_wincred()
-        if live_cred and isinstance(live_cred, dict):
-            live_email = live_cred.get("id_token_email")
-            if live_email:
-                email = live_email
-                has_oauth = bool(live_cred.get("token"))
+    # 4. If perfil1 and still unknown, check primary ~/.gemini
+    if email == "Desconhecido" and prof["name"] == "perfil1":
+        primary_w = os.path.join(USER_HOME, ".gemini", "wincred.json")
+        if os.path.exists(primary_w):
+            try:
+                with open(primary_w, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                    email = d.get("id_token_email", email)
+                    has_oauth = bool(d.get("token"))
+            except Exception:
+                pass
 
     # Read Quotas Cache
     quotas = {}
@@ -301,79 +315,82 @@ def cmd_list():
 
 def pre_run(target_profile):
     """
-    Called before agy.exe runs for target_profile.
-    Saves current Windows Credential Manager to previous profile,
+    Called before agy runs for target_profile.
+    Safely captures current Windows Credential Manager token to its rightful profile,
     and loads target_profile's credentials into Windows Credential Manager.
     """
     profiles = discover_profiles()
     if target_profile not in profiles:
         return False
 
-    current_active = get_active_profile()
-    if current_active in profiles and current_active != target_profile:
-        # Save whatever is in gemini:antigravity to current_active profile's directory
-        cur_cred = read_wincred()
-        if cur_cred and isinstance(cur_cred, dict) and cur_cred.get("id_token_email"):
-            cur_gemini = profiles[current_active]["gemini_dir"]
+    # 1. Protect whatever is currently in Windows Credential Manager:
+    # Only save to a profile if the email matches that profile's known email or active profile!
+    cur_cred = read_wincred()
+    if cur_cred and isinstance(cur_cred, dict) and cur_cred.get("id_token_email"):
+        cred_email = cur_cred.get("id_token_email")
+        owner_profile = None
+        for p_name, p_data in profiles.items():
+            p_gemini = p_data["gemini_dir"]
+            p_wfile = os.path.join(p_gemini, "wincred.json")
+            if os.path.exists(p_wfile):
+                try:
+                    with open(p_wfile, "r", encoding="utf-8") as f:
+                        if json.load(f).get("id_token_email") == cred_email:
+                            owner_profile = p_name
+                            break
+                except Exception:
+                    pass
+        if not owner_profile:
+            current_active = get_active_profile()
+            if current_active in profiles:
+                owner_profile = current_active
+
+        if owner_profile:
+            cur_gemini = profiles[owner_profile]["gemini_dir"]
             os.makedirs(cur_gemini, exist_ok=True)
             with open(os.path.join(cur_gemini, "wincred.json"), "w", encoding="utf-8") as f:
                 json.dump(cur_cred, f, indent=2)
             with open(os.path.join(cur_gemini, "google_accounts.json"), "w", encoding="utf-8") as f:
-                json.dump({"active": cur_cred.get("id_token_email"), "old": []}, f, indent=2)
+                json.dump({"active": cred_email, "old": []}, f, indent=2)
 
-    # Now load target_profile's wincred.json
+    # 2. Now load target_profile's credentials into Windows Credential Manager
     target_gemini = profiles[target_profile]["gemini_dir"]
     wincred_file = os.path.join(target_gemini, "wincred.json")
+    loaded = False
     if os.path.exists(wincred_file):
         try:
             with open(wincred_file, "r", encoding="utf-8") as f:
                 t_cred = json.load(f)
-            if t_cred and t_cred.get("token"):
+            if t_cred and t_cred.get("token") and t_cred.get("id_token_email"):
                 write_wincred(t_cred)
-            else:
-                delete_wincred()
+                # Keep staging C:\Users\ma038\.gemini in sync
+                staging_gemini = os.path.join(USER_HOME, ".gemini")
+                os.makedirs(staging_gemini, exist_ok=True)
+                with open(os.path.join(staging_gemini, "wincred.json"), "w", encoding="utf-8") as f:
+                    json.dump(t_cred, f, indent=2)
+                with open(os.path.join(staging_gemini, "google_accounts.json"), "w", encoding="utf-8") as f:
+                    json.dump({"active": t_cred.get("id_token_email"), "old": []}, f, indent=2)
+                loaded = True
         except Exception:
-            delete_wincred()
-    else:
-        # Check if oauth_creds.json exists to synthesize wincred.json
-        oauth_file = os.path.join(target_gemini, "oauth_creds.json")
-        if os.path.exists(oauth_file):
+            pass
+
+    if not loaded:
+        # Profile is not yet authenticated or has no token (e.g. fresh perfil3)
+        delete_wincred()
+        staging_gemini = os.path.join(USER_HOME, ".gemini")
+        staging_wincred = os.path.join(staging_gemini, "wincred.json")
+        if os.path.exists(staging_wincred):
             try:
-                with open(oauth_file, "r", encoding="utf-8") as f:
-                    orig = json.load(f)
-                email = "sartorimarcelo@gmail.com"
-                id_tok = orig.get("id_token", "")
-                if "." in id_tok:
-                    import base64
-                    payload_b64 = id_tok.split(".")[1]
-                    payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
-                    claims = json.loads(base64.urlsafe_b64decode(payload_b64.encode()).decode())
-                    email = claims.get("email", email)
-                synthesized = {
-                    "token": {
-                        "access_token": orig.get("access_token"),
-                        "token_type": "Bearer",
-                        "refresh_token": orig.get("refresh_token"),
-                        "expiry": datetime.datetime.now().isoformat(),
-                        "expires_in": 3599
-                    },
-                    "auth_method": "consumer",
-                    "id_token_email": email
-                }
-                with open(wincred_file, "w", encoding="utf-8") as f:
-                    json.dump(synthesized, f, indent=2)
-                write_wincred(synthesized)
+                os.remove(staging_wincred)
             except Exception:
-                delete_wincred()
-        else:
-            delete_wincred()
+                pass
 
     set_active_profile(target_profile)
     return True
 
 def post_run(target_profile):
     """
-    Called after agy.exe exits for target_profile.
+    Called after agy exits for target_profile.
     Captures any updated tokens / logins and persists them to target_profile's directory.
     """
     profiles = discover_profiles()
@@ -381,13 +398,32 @@ def post_run(target_profile):
         return False
 
     cred = read_wincred()
+    target_gemini = profiles[target_profile]["gemini_dir"]
+    os.makedirs(target_gemini, exist_ok=True)
+
     if cred and isinstance(cred, dict) and cred.get("id_token_email"):
-        gemini_dir = profiles[target_profile]["gemini_dir"]
-        os.makedirs(gemini_dir, exist_ok=True)
-        with open(os.path.join(gemini_dir, "wincred.json"), "w", encoding="utf-8") as f:
+        email = cred.get("id_token_email")
+        with open(os.path.join(target_gemini, "wincred.json"), "w", encoding="utf-8") as f:
             json.dump(cred, f, indent=2)
-        with open(os.path.join(gemini_dir, "google_accounts.json"), "w", encoding="utf-8") as f:
-            json.dump({"active": cred.get("id_token_email"), "old": []}, f, indent=2)
+        with open(os.path.join(target_gemini, "google_accounts.json"), "w", encoding="utf-8") as f:
+            json.dump({"active": email, "old": []}, f, indent=2)
+        if target_profile == "perfil1":
+            staging_gemini = os.path.join(USER_HOME, ".gemini")
+            try:
+                with open(os.path.join(staging_gemini, "wincred.json"), "w", encoding="utf-8") as f:
+                    json.dump(cred, f, indent=2)
+                with open(os.path.join(staging_gemini, "google_accounts.json"), "w", encoding="utf-8") as f:
+                    json.dump({"active": email, "old": []}, f, indent=2)
+            except Exception:
+                pass
+    else:
+        # Credential was deleted (user logged out inside CLI session)
+        target_wincred = os.path.join(target_gemini, "wincred.json")
+        if os.path.exists(target_wincred):
+            try:
+                os.remove(target_wincred)
+            except Exception:
+                pass
     return True
 
 def cmd_switch(target):
@@ -422,10 +458,6 @@ def cmd_switch(target):
     info = get_profile_info(target_prof)
 
     print(f"\n{BOLD}{GREEN}[✓] Perfil alternado com sucesso para: {chosen_key.upper()}!{RESET}")
-    print(f"    👤 Conta ativa: {CYAN}{info['email']}{RESET}")
-    print(f"    📁 Raiz: {GRAY}{target_prof['root']}{RESET}")
-    print(f"    ⚡ As próximas sessões do Antigravity CLI e Desktop usarão este perfil.\n")
-    return True
     print(f"    👤 Conta ativa: {CYAN}{info['email']}{RESET}")
     print(f"    📁 Raiz: {GRAY}{target_prof['root']}{RESET}")
     print(f"    ⚡ As próximas sessões do Antigravity CLI e Desktop usarão este perfil.\n")

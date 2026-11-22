@@ -360,10 +360,18 @@ def parse_quota(quota_dict, rate_limits_dict, keys):
 
     return None
 
-def get_active_profile_name():
+def get_active_profile_name(email=None):
     env_p = os.environ.get("AGY_PROFILE") or os.environ.get("ANTIGRAVITY_PROFILE")
     if env_p:
         return env_p
+    if email:
+        email_map = {
+            "sartorimarcelo@gmail.com": "perfil1",
+            "masl90380@gmail.com": "perfil2",
+            "muvytec@gmail.com": "perfil4"
+        }
+        if email in email_map:
+            return email_map[email]
     active_file = os.path.join(CUSTOM_DIR, "active_profile.json")
     if os.path.exists(active_file):
         try:
@@ -660,7 +668,7 @@ def main():
                 line2_items.append(burn_tag)
 
         # Active Profile & Quota Cache Sync
-        active_prof = get_active_profile_name()
+        active_prof = get_active_profile_name(email)
         save_profile_quota(active_prof, email, quota_5h, quota_weekly)
 
         # Account / Email, Profile & Plan Tier
