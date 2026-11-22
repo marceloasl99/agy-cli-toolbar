@@ -85,13 +85,20 @@ Desenvolvida em **Python Puro (zero dependências externas, latência de renderi
 
 Isola contas Google em diretórios independentes (`~/.agy-perfis/perfil1`, `perfil2`, `perfil3`, `perfil4`, `agy5`, `agy6`...) sem conflito de credenciais nem vazamento de sessões.
 
+> **Importante:** Use `agy1`, `agy2`, ..., `agy6` para abrir cada perfil isolado (`agy` executa o binário nativo diretamente). Como o Antigravity CLI usa um único slot no Gerenciador de Credenciais do Windows, cada perfil vincula seu e-mail esperado em `profile_identity.json` — o `pre-run` troca o token apenas para aquela identidade e o `post-run` bloqueia salvamento de conta diferente. Abrir um perfil por vez é o modo mais seguro; dois perfis diferentes abertos ao mesmo tempo compartilham esse único slot de credencial na inicialização.
+
 | Comando | Ação |
 | :--- | :--- |
 | `agy-profile` | Abre o menu interativo colorido no terminal |
 | `agy-profile list` | Lista todos os perfis com email, status OAuth, barras de cota e modelos cobertos |
 | `agy-profile switch <num\|id>` | Alterna o perfil ativo no sistema e sincroniza as credenciais |
 | `agy-profile create <nome> [email]` | Cria um novo perfil com `.gemini`, `settings.json` e comandos dedicados (`agy5`, `agy6`...) |
-| `agy-profile auth <num\|id>` | Autenticação **OAuth 2.0 PKCE** no navegador, Desktop 1-Clique ou cópia de perfil |
+| `agy-profile auth <num\|id>` | Autenticação **OAuth 2.0 PKCE** no navegador ou Desktop 1-Clique |
+| `agy-profile doctor [--fix]` | Audita os vínculos de conta de todos os perfis e corrige duplicidades/contaminações |
+| `agy-profile reset-auth <num\|id>` | Coloca credenciais salvas do perfil em quarentena para refazer o login |
+| `agy-profile bind <perfil> <email>` | Vincula manualmente um perfil ao e-mail Google esperado |
+| `agy-profile capture <perfil>` | Captura a sessão ativa do Windows Credential Manager para o perfil informado |
+| `agy-profile launchers` | Regera os launchers canônicos `agy1.cmd`..`agyN.cmd` e limpa atalhos antigos |
 | `agy-profile desktop <num\|id>` | Abre o **Antigravity Desktop** isolado (`--user-data-dir`) para a conta selecionada |
 | `agy-profile run <num\|id> [args]` | Executa o `agy` CLI nas variáveis de ambiente isoladas do perfil |
 | `agy-profile delete <num\|id>` | Exclui com segurança um perfil adicional e remove seus scripts de launcher |
@@ -102,7 +109,7 @@ Isola contas Google em diretórios independentes (`~/.agy-perfis/perfil1`, `perf
 
 ### 📂 Pasta de Trabalho Padrão (`agy-profile workdir`)
 
-Cada perfil pode ter uma ou mais **pastas de trabalho confiáveis** (diretórios de projetos). Ao abrir `agy1`, `agy5` etc., o CLI entra automaticamente na pasta configurada — sem precisar navegar manualmente.
+Cada perfil pode ter uma ou mais **pastas de trabalho confiáveis** (diretórios de projetos). Sempre que você define, adiciona ou seleciona uma pasta no seletor, ela também é gravada em `trustedWorkspaces` no `settings.json` do perfil, e o CLI entra nela automaticamente ao iniciar.
 
 ```bash
 # Define a pasta padrão para um perfil (abre nela sempre que lançado)
@@ -122,14 +129,56 @@ agy-profile workdir choose perfil1
 agy-profile workdir remove perfil1 C:\Projetos\outro
 ```
 
-**Como funciona ao abrir o perfil:**
-
-```
-agy5  ──► hook pre-run ──► cd para pasta configurada ──► agy.exe ──► hook post-run
-```
-
-Se nenhuma pasta estiver configurada, o CLI abre no diretório atual (comportamento padrão).  
 As pastas ficam salvas em `~/.antigravity-custom/profile_workdirs.json`.
+
+---
+
+### 🚀 Opções de Inicialização: Pasta Padrão + Permissão (`agy-profile launch`)
+
+Antes de abrir o `agy.exe`, cada launcher (`agy1`..`agyN`) exibe um seletor rápido para confirmar ou escolher a **pasta de trabalho** e o **modo de permissão** (salvos em `~/.antigravity-custom/profile_launch.json`).
+
+```bash
+# Ver configuração de inicialização de todos os perfis (ou de um específico)
+agy-profile launch show [perfil]
+
+# Definir permissão padrão (atalho: agy-profile perm <perfil> <preset>)
+agy-profile launch perm perfil1 all
+agy-profile perm agy5 auto
+
+# Ativar ou desativar o seletor ao abrir (on | off)
+agy-profile launch ask perfil1 off
+
+# Abrir o configurador interativo e salvar padrões
+agy-profile launch config perfil1
+```
+
+**Presets de Permissão:**
+
+| Preset | Descrição | Flag passada ao CLI |
+| :--- | :--- | :--- |
+| `default` | Padrão (pergunta antes de cada ação) | *(nenhuma)* |
+| `accept-edits` | Aceitar edições automaticamente | `--mode accept-edits` |
+| `auto` | Modo automático | `--mode auto` |
+| `plan` | Somente planejar | `--mode plan` |
+| `all` *(aliases: `todas`, `skip`)* | **Todas as permissões (sem confirmação)** | `--dangerously-skip-permissions` |
+| `sandbox` | Sandbox (terminal restrito) | `--sandbox` |
+
+**Teclas no seletor interativo:**
+
+* `Enter` — Abrir com a pasta e permissão atuais
+* `P` — Escolher pasta salva, usar pasta atual (`A`) ou digitar novo caminho (`N`)
+* `M` — Escolher modo de permissão
+* `S` — Salvar pasta e permissão atuais como padrão do perfil
+* `D` — Não perguntar mais neste perfil (`ask_on_launch = false`) e abrir
+* `0` — Cancelar abertura
+
+> **Dica para scripts:** Defina `AGY_NO_PICKER=1` (ou passe flags diretamente como `--mode plan` / `--dangerously-skip-permissions`) para pular o seletor interativo sem alterar sua preferência salva.
+
+**Fluxo ao abrir o perfil:**
+
+```
+agy5 ──► hook pre-run (troca credencial + seletor) ──► cd para pasta ──► agy.exe [flags] ──► hook post-run (salva com trava de identidade)
+```
 
 ---
 

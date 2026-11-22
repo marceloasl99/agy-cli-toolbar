@@ -85,13 +85,20 @@ Engineered in **pure Python with zero external dependencies and sub-10ms render 
 
 Isolates individual Google accounts into dedicated sandboxes (`~/.agy-perfis/perfil1`, `perfil2`, `perfil3`, `perfil4`, `agy5`, `agy6`...) without token collisions or session cross-contamination.
 
+> **Important:** Use `agy1`, `agy2`, ..., `agy6` to launch isolated profiles (`agy` invokes the native raw CLI binary directly). Because Antigravity CLI stores its active session token in a single Windows Credential Manager slot, each profile binds its expected email in `profile_identity.json` — `pre-run` swaps tokens only for that identity and `post-run` refuses to save a mismatched account. Running profiles sequentially (one at a time) is safest; launching two different profiles simultaneously shares that single credential slot during startup.
+
 | Command | Action |
 | :--- | :--- |
 | `agy-profile` | Opens interactive terminal menu for managing accounts |
 | `agy-profile list` | Lists all accounts, OAuth connection states, quotas, and model coverage |
 | `agy-profile switch <num\|id>` | Switches the active system profile and synchronizes credentials |
 | `agy-profile create <name> [email]` | Creates a new sandboxed profile with `.gemini`, `settings.json`, and dedicated CLI launchers |
-| `agy-profile auth <num\|id>` | Triggers **OAuth 2.0 PKCE** browser login, Desktop 1-Click login, or profile cloning |
+| `agy-profile auth <num\|id>` | Triggers **OAuth 2.0 PKCE** browser login or Desktop 1-Click login |
+| `agy-profile doctor [--fix]` | Audits credential bindings across all profiles and repairs duplicate/contaminated accounts |
+| `agy-profile reset-auth <num\|id>` | Quarantines saved auth files for a profile so it prompts for a fresh login |
+| `agy-profile bind <perfil> <email>` | Manually binds a profile to an expected Google account email |
+| `agy-profile capture <perfil>` | Saves the currently active Windows session into the specified profile |
+| `agy-profile launchers` | Regenerates canonical `agy1.cmd`..`agyN.cmd` launchers and cleans stale wrappers |
 | `agy-profile desktop <num\|id>` | Launches isolated **Antigravity Desktop** (`--user-data-dir`) for selected profile |
 | `agy-profile run <num\|id> [args]` | Runs `agy` CLI inside the sandboxed environment of the specified profile |
 | `agy-profile delete <num\|id>` | Safely deletes an extra profile and removes its launcher scripts |
@@ -102,7 +109,7 @@ Isolates individual Google accounts into dedicated sandboxes (`~/.agy-perfis/per
 
 ### 📂 Trusted Working Directory (`agy-profile workdir`)
 
-Each profile can have one or more **trusted working directories** (project folders). When you launch `agy1`, `agy5`, etc., the CLI automatically `cd`s into your configured folder before starting — no manual navigation needed.
+Each profile can have one or more **trusted working directories** (project folders). Whenever you set, add, or select a folder in the launcher picker, it is also registered under `trustedWorkspaces` in that profile's `settings.json`, and the CLI automatically `cd`s into it on launch.
 
 ```bash
 # Set the default folder for a profile (opens in this dir every time)
@@ -121,18 +128,60 @@ agy-profile workdir choose perfil1
 # Remove a configured folder
 agy-profile workdir remove perfil1 C:\Projects\other
 
-# Output path only (used internally by .cmd launchers)
+# Output path only
 agy-profile workdir get perfil1
 ```
+
+Configured folders are stored in `~/.antigravity-custom/profile_workdirs.json`.
+
+---
+
+### 🚀 Launch Options: Default Folder + Permission Mode (`agy-profile launch`)
+
+Before `agy.exe` starts, each profile launcher (`agy1`..`agyN`) can open an interactive pre-launch picker to confirm or override the **working directory** and **permission mode** (stored in `~/.antigravity-custom/profile_launch.json`).
+
+```bash
+# View launch settings for all profiles (or a specific one)
+agy-profile launch show [profile]
+
+# Set default permission preset (shortcut: agy-profile perm <profile> <preset>)
+agy-profile launch perm perfil1 all
+agy-profile perm agy5 auto
+
+# Toggle interactive picker on launch (on | off)
+agy-profile launch ask perfil1 off
+
+# Open the interactive configurator and save defaults
+agy-profile launch config perfil1
+```
+
+**Permission Presets:**
+
+| Preset | Description | CLI Flag Passed |
+| :--- | :--- | :--- |
+| `default` | Ask before each action *(default)* | *(none)* |
+| `accept-edits` | Auto-accept file edits | `--mode accept-edits` |
+| `auto` | Automatic execution mode | `--mode auto` |
+| `plan` | Planning mode only | `--mode plan` |
+| `all` *(aliases: `todas`, `skip`)* | **All permissions (no prompts)** | `--dangerously-skip-permissions` |
+| `sandbox` | Restricted terminal sandbox | `--sandbox` |
+
+**Interactive Picker Keys:**
+
+* `Enter` — Launch with current folder and permission
+* `P` — Pick from saved folders, current directory (`A`), or enter a new path (`N`)
+* `M` — Pick permission preset
+* `S` — Save current folder & permission as the profile default
+* `D` — Disable the picker for this profile (`ask_on_launch = false`) and launch
+* `0` — Cancel launch
+
+> **Automation tip:** Set `AGY_NO_PICKER=1` (or pass explicit flags like `--mode plan` / `--dangerously-skip-permissions`) to bypass the interactive picker without changing your saved `ask_on_launch` preference.
 
 **How it works at launch:**
 
 ```
-agy5  ──► pre-run hook ──► cd to configured folder ──► agy.exe ──► post-run hook
+agy5 ──► pre-run hook (swap creds + launch picker) ──► cd to folder ──► agy.exe [perm args] ──► post-run hook (guarded save)
 ```
-
-If no folder is configured, the CLI opens in the directory where you invoked the command (default behavior).
-Configured folders are stored in `~/.antigravity-custom/profile_workdirs.json`.
 
 ---
 

@@ -225,17 +225,16 @@ def mask_email(email):
 
 def get_profile_cli_command(profile_key):
     if profile_key == "perfil1":
-        return "agy"
+        return "agy1"
     if profile_key.startswith("perfil") and profile_key[6:].isdigit():
         return f"agy{profile_key[6:]}"
     if profile_key.startswith("agy") and profile_key[3:].isdigit():
         return profile_key
     if profile_key.isdigit():
-        return f"agy{profile_key}" if profile_key != "1" else "agy"
+        return f"agy{profile_key}"
     return f"agy-{profile_key}"
 
 def open_cmd_for_profile(profile_key):
-    pm.pre_run(profile_key)
     cmd_name = get_profile_cli_command(profile_key)
     profiles = pm.discover_profiles()
     prof = profiles.get(profile_key, {})
@@ -1584,6 +1583,11 @@ class DesktopWidget(tk.Tk):
                        font=("Segoe UI", 9))
         menu.add_command(label=f"⚡ Abrir CLI ({cmd_name})", command=lambda: open_cmd_for_profile(profile_key))
         menu.add_command(label="🖥️ Abrir Desktop", command=lambda: pm.cmd_desktop(profile_key))
+        pm_path = os.path.join(pm.CUSTOM_DIR, "profile_manager.py")
+        menu.add_command(
+            label="🚀 Opções de inicialização",
+            command=lambda p=profile_key, mp=pm_path: subprocess.Popen(f'start cmd.exe /k python "{mp}" launch config {p}', shell=True)
+        )
         menu.add_command(label="🔄 Ativar Perfil", command=lambda: self.switch_profile_and_refresh(profile_key))
         menu.add_separator()
         menu.add_command(
