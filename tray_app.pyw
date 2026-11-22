@@ -134,8 +134,8 @@ THEMES = {
 DEFAULT_WIDGET_CONFIG = {
     "x": 100,
     "y": 100,
-    "width": 680,
-    "height": 370,
+    "width": 760,
+    "height": 420,
     "always_on_top": True,
     "visible": True,
     "locked": False,
@@ -149,6 +149,8 @@ DEFAULT_WIDGET_CONFIG = {
     "alert_threshold": 85,
     "show_free_pct": True,
     "show_countdown": True,
+    "ui_scale": 1.20,
+    "font_size_offset": 1,
     "enabled_profiles": {},
     "profile_order": [],
     "profile_nicknames": {},
@@ -453,6 +455,48 @@ class SettingsDialog(tk.Toplevel):
         tk.Radiobutton(f_den, text="Compacto (Visual Slim)", variable=self.density_var, value="compact",
                        font=("Segoe UI", 8), fg="#cbd5e1", bg="#0f172a", selectcolor="#1e293b").pack(side="left")
 
+        # Zoom & Font Size Adjustment
+        tk.Label(f, text="🔍 Zoom da Interface (Escala Geral):", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(12, 2))
+        f_zoom = tk.Frame(f, bg="#0f172a")
+        f_zoom.pack(fill="x")
+
+        cur_zoom = int(round(float(self.config_copy.get("ui_scale", 1.20)) * 100))
+        self.zoom_var = tk.IntVar(value=cur_zoom)
+        self.zoom_val_lbl = tk.Label(f_zoom, text=f"{cur_zoom}%", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a", width=5)
+        self.zoom_val_lbl.pack(side="right")
+
+        scale_zoom = tk.Scale(f_zoom, from_=75, to=200, orient="horizontal", variable=self.zoom_var, bg="#1e293b", fg="#f8fafc",
+                              highlightthickness=0, bd=0, activebackground="#38bdf8",
+                              command=lambda v: self.zoom_val_lbl.config(text=f"{v}%"))
+        scale_zoom.pack(fill="x", side="left", expand=True)
+
+        f_z_presets = tk.Frame(f, bg="#0f172a")
+        f_z_presets.pack(fill="x", pady=(2, 6))
+        for z_pct, z_label in [(80, "80%"), (100, "100%"), (115, "115%"), (130, "130%"), (150, "150%"), (175, "175%"), (200, "200%")]:
+            tk.Button(f_z_presets, text=z_label, font=("Segoe UI", 7, "bold"), fg="#cbd5e1", bg="#1e293b",
+                      activebackground="#0284c7", bd=0, padx=6, pady=2, cursor="hand2",
+                      command=lambda val=z_pct: self.apply_zoom_preset(val)).pack(side="left", padx=2)
+
+        tk.Label(f, text="🔤 Tamanho da Fonte (Ajuste Fino):", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(8, 2))
+        f_fnt = tk.Frame(f, bg="#0f172a")
+        f_fnt.pack(fill="x", pady=(2, 4))
+        self.font_offset_var = tk.IntVar(value=int(self.config_copy.get("font_size_offset", 1)))
+        
+        font_options = [
+            (-1, "Pequena (-1)"),
+            (0, "Normal (0)"),
+            (1, "Média (+1)"),
+            (2, "Grande (+2)"),
+            (3, "Extra Grande (+3)")
+        ]
+        for val, label in font_options:
+            tk.Radiobutton(f_fnt, text=label, variable=self.font_offset_var, value=val,
+                           font=("Segoe UI", 8), fg="#cbd5e1", bg="#0f172a", selectcolor="#1e293b").pack(side="left", padx=(0, 6))
+
+    def apply_zoom_preset(self, val):
+        self.zoom_var.set(val)
+        self.zoom_val_lbl.config(text=f"{val}%")
+
     def select_preset(self, p):
         self.preset_var.set(p)
         for name, btn in self.preset_buttons.items():
@@ -738,6 +782,11 @@ class SettingsDialog(tk.Toplevel):
         open_folder(log_file)
 
     def save_and_apply(self):
+        new_scale = round(self.zoom_var.get() / 100.0, 2)
+        old_scale = float(self.config_copy.get("ui_scale", 1.20))
+        self.config_copy["ui_scale"] = new_scale
+        self.config_copy["font_size_offset"] = self.font_offset_var.get()
+
         preset = self.preset_var.get()
         if preset in GRID_PRESETS:
             cols, rows = GRID_PRESETS[preset]
@@ -745,12 +794,19 @@ class SettingsDialog(tk.Toplevel):
             self.config_copy["grid_preset"] = preset
             self.config_copy["columns"] = cols
 
-            # Calculate optimal window dimensions
-            opt_w = min(max(cols * 330 + 20, 340), 1600)
-            opt_h = min(max(rows * 135 + 75, 180), 1000)
+            # Calculate optimal window dimensions incorporating zoom scale
+            opt_w = min(max(int(round(cols * 330 * new_scale + 20)), 360), 2000)
+            opt_h = min(max(int(round(rows * 135 * new_scale + 75)), 200), 1400)
             self.parent.geometry(f"{opt_w}x{opt_h}")
             self.config_copy["width"] = opt_w
             self.config_copy["height"] = opt_h
+        elif new_scale != old_scale:
+            ratio = new_scale / max(old_scale, 0.1)
+            new_w = max(int(round(self.parent.winfo_width() * ratio)), 360)
+            new_h = max(int(round(self.parent.winfo_height() * ratio)), 200)
+            self.parent.geometry(f"{new_w}x{new_h}")
+            self.config_copy["width"] = new_w
+            self.config_copy["height"] = new_h
 
         self.config_copy["theme"] = self.theme_var.get()
         self.config_copy["refresh_seconds"] = self.ref_var.get()
@@ -824,6 +880,46 @@ class DesktopWidget(tk.Tk):
     def get_theme(self):
         return THEMES.get(self.config_data.get("theme", "Dark Slate"), THEMES["Dark Slate"])
 
+    def get_font(self, base_size, weight="normal", family="Segoe UI"):
+        scale = float(self.config_data.get("ui_scale", 1.20))
+        offset = int(self.config_data.get("font_size_offset", 1))
+        scaled_size = max(6, int(round((base_size + offset) * scale)))
+        return (family, scaled_size, weight)
+
+    def adjust_zoom(self, delta):
+        cur_scale = float(self.config_data.get("ui_scale", 1.20))
+        new_scale = round(max(0.70, min(cur_scale + delta, 2.50)), 2)
+        if new_scale != cur_scale:
+            self.set_zoom(new_scale)
+
+    def set_zoom(self, scale_val):
+        old_scale = float(self.config_data.get("ui_scale", 1.20))
+        scale_val = round(max(0.70, min(scale_val, 2.50)), 2)
+        self.config_data["ui_scale"] = scale_val
+
+        # Scale window geometry proportionally
+        ratio = scale_val / max(old_scale, 0.1)
+        cur_w = self.winfo_width()
+        cur_h = self.winfo_height()
+        new_w = max(int(round(cur_w * ratio)), 360)
+        new_h = max(int(round(cur_h * ratio)), 200)
+        self.geometry(f"{new_w}x{new_h}")
+        self.config_data["width"] = new_w
+        self.config_data["height"] = new_h
+        save_widget_config(self.config_data)
+
+        if hasattr(self, "zoom_lbl"):
+            self.zoom_lbl.config(text=f"{int(round(scale_val * 100))}%")
+
+        self.apply_full_config()
+        self.refresh_profiles(force=True)
+
+    def set_font_offset(self, offset):
+        self.config_data["font_size_offset"] = int(offset)
+        save_widget_config(self.config_data)
+        self.apply_full_config()
+        self.refresh_profiles(force=True)
+
     def apply_full_config(self):
         self.theme_colors = self.get_theme()
         self.configure(bg=self.theme_colors["bg"])
@@ -832,17 +928,27 @@ class DesktopWidget(tk.Tk):
 
         # Update header & lock button state
         locked = self.config_data.get("locked", False)
-        self.lock_btn.config(text="🔒 Fixado" if locked else "🔓 Mover", fg=self.theme_colors["accent"] if locked else "#94a3b8")
-        self.pin_btn.config(text="📌" if self.config_data.get("always_on_top", True) else "📍")
-        self.grid_btn.config(text=f"⊞ {self.config_data.get('grid_preset', '2x2')}")
+        self.lock_btn.config(text="🔒 Fixado" if locked else "🔓 Mover", font=self.get_font(8, "bold"), fg=self.theme_colors["accent"] if locked else "#94a3b8")
+        self.pin_btn.config(text="📌" if self.config_data.get("always_on_top", True) else "📍", font=self.get_font(9))
+        self.grid_btn.config(text=f"⊞ {self.config_data.get('grid_preset', '2x2')}", font=self.get_font(8, "bold"))
+
+        if hasattr(self, "zoom_lbl"):
+            cur_pct = int(round(float(self.config_data.get("ui_scale", 1.20)) * 100))
+            self.zoom_lbl.config(text=f"{cur_pct}%", font=self.get_font(8, "bold"))
+        if hasattr(self, "btn_settings"):
+            self.btn_settings.config(font=self.get_font(8, "bold"))
 
         # Update styles of container
         self.outer_frame.config(bg=self.theme_colors["bg"], highlightbackground=self.theme_colors["card_border"])
         self.header.config(bg=self.theme_colors["header_bg"])
-        self.title_lbl.config(bg=self.theme_colors["header_bg"], fg=self.theme_colors["text"])
+        self.title_lbl.config(bg=self.theme_colors["header_bg"], fg=self.theme_colors["text"], font=self.get_font(10, "bold"))
         self.grid_container.config(bg=self.theme_colors["bg"])
         self.footer.config(bg=self.theme_colors["footer_bg"])
-        self.time_lbl.config(bg=self.theme_colors["footer_bg"])
+        self.time_lbl.config(bg=self.theme_colors["footer_bg"], font=self.get_font(8))
+        if hasattr(self, "btn_refresh"):
+            self.btn_refresh.config(font=self.get_font(8, "bold"))
+        if hasattr(self, "btn_new"):
+            self.btn_new.config(font=self.get_font(8, "bold"))
 
         self.refresh_profiles(force=True)
 
@@ -912,35 +1018,55 @@ class DesktopWidget(tk.Tk):
         self.header = tk.Frame(self.outer_frame, bg=self.theme_colors["header_bg"], height=38)
         self.header.pack(fill="x", side="top")
 
-        self.title_lbl = tk.Label(self.header, text="⚡ Antigravity Monitor", font=("Segoe UI", 10, "bold"),
+        self.title_lbl = tk.Label(self.header, text="⚡ Antigravity Monitor", font=self.get_font(10, "bold"),
                                   fg=self.theme_colors["text"], bg=self.theme_colors["header_bg"])
         self.title_lbl.pack(side="left", padx=10, pady=6)
 
         # Header Action Buttons
-        btn_close = tk.Label(self.header, text="✕", font=("Segoe UI", 10, "bold"), fg="#94a3b8", bg=self.theme_colors["header_bg"], cursor="hand2")
+        btn_close = tk.Label(self.header, text="✕", font=self.get_font(10, "bold"), fg="#94a3b8", bg=self.theme_colors["header_bg"], cursor="hand2")
         btn_close.pack(side="right", padx=(4, 10))
         btn_close.bind("<Button-1>", lambda e: self.hide_widget())
 
         self.pin_btn = tk.Label(self.header, text="📌" if self.config_data.get("always_on_top", True) else "📍",
-                                font=("Segoe UI", 9), fg="#94a3b8", bg=self.theme_colors["header_bg"], cursor="hand2")
+                                font=self.get_font(9), fg="#94a3b8", bg=self.theme_colors["header_bg"], cursor="hand2")
         self.pin_btn.pack(side="right", padx=4)
         self.pin_btn.bind("<Button-1>", lambda e: self.toggle_pin())
 
         locked = self.config_data.get("locked", False)
-        self.lock_btn = tk.Label(self.header, text="🔒 Fixado" if locked else "🔓 Mover", font=("Segoe UI", 8, "bold"),
+        self.lock_btn = tk.Label(self.header, text="🔒 Fixado" if locked else "🔓 Mover", font=self.get_font(8, "bold"),
                                  fg=self.theme_colors["accent"] if locked else "#94a3b8", bg=self.theme_colors["header_bg"], cursor="hand2")
-        self.lock_btn.pack(side="right", padx=6)
+        self.lock_btn.pack(side="right", padx=4)
         self.lock_btn.bind("<Button-1>", lambda e: self.toggle_lock())
 
-        self.grid_btn = tk.Label(self.header, text=f"⊞ {self.config_data.get('grid_preset', '2x2')}", font=("Segoe UI", 8, "bold"),
+        self.grid_btn = tk.Label(self.header, text=f"⊞ {self.config_data.get('grid_preset', '2x2')}", font=self.get_font(8, "bold"),
                                  fg=self.theme_colors["accent"], bg=self.theme_colors["header_bg"], cursor="hand2")
-        self.grid_btn.pack(side="right", padx=6)
+        self.grid_btn.pack(side="right", padx=4)
         self.grid_btn.bind("<Button-1>", lambda e: self.quick_cycle_grid())
 
-        btn_settings = tk.Label(self.header, text="⚙️ Ajustes", font=("Segoe UI", 8, "bold"), fg="#38bdf8",
-                                bg=self.theme_colors["header_bg"], cursor="hand2")
-        btn_settings.pack(side="right", padx=6)
-        btn_settings.bind("<Button-1>", lambda e: self.open_settings())
+        # Quick Zoom Controls in Header: [-] 120% [+]
+        self.zoom_frame = tk.Frame(self.header, bg=self.theme_colors["header_bg"])
+        self.zoom_frame.pack(side="right", padx=3)
+
+        btn_zoom_out = tk.Label(self.zoom_frame, text="🔍-", font=self.get_font(8, "bold"),
+                                fg="#94a3b8", bg=self.theme_colors["header_bg"], cursor="hand2")
+        btn_zoom_out.pack(side="left", padx=1)
+        btn_zoom_out.bind("<Button-1>", lambda e: self.adjust_zoom(-0.10))
+
+        cur_pct = int(round(float(self.config_data.get("ui_scale", 1.20)) * 100))
+        self.zoom_lbl = tk.Label(self.zoom_frame, text=f"{cur_pct}%", font=self.get_font(8, "bold"),
+                                 fg=self.theme_colors["accent"], bg=self.theme_colors["header_bg"], cursor="hand2")
+        self.zoom_lbl.pack(side="left", padx=2)
+        self.zoom_lbl.bind("<Button-1>", lambda e: self.set_zoom(1.0))
+
+        btn_zoom_in = tk.Label(self.zoom_frame, text="+", font=self.get_font(8, "bold"),
+                               fg="#94a3b8", bg=self.theme_colors["header_bg"], cursor="hand2")
+        btn_zoom_in.pack(side="left", padx=1)
+        btn_zoom_in.bind("<Button-1>", lambda e: self.adjust_zoom(0.10))
+
+        self.btn_settings = tk.Label(self.header, text="⚙️ Ajustes", font=self.get_font(8, "bold"), fg="#38bdf8",
+                                     bg=self.theme_colors["header_bg"], cursor="hand2")
+        self.btn_settings.pack(side="right", padx=4)
+        self.btn_settings.bind("<Button-1>", lambda e: self.open_settings())
 
         # Grid Profiles Container
         self.grid_container = tk.Frame(self.outer_frame, bg=self.theme_colors["bg"])
@@ -950,27 +1076,34 @@ class DesktopWidget(tk.Tk):
         self.footer = tk.Frame(self.outer_frame, bg=self.theme_colors["footer_bg"], height=30)
         self.footer.pack(fill="x", side="bottom")
 
-        self.time_lbl = tk.Label(self.footer, text="Atualizado", font=("Segoe UI", 8), fg="#64748b", bg=self.theme_colors["footer_bg"])
+        self.time_lbl = tk.Label(self.footer, text="Atualizado", font=self.get_font(8), fg="#64748b", bg=self.theme_colors["footer_bg"])
         self.time_lbl.pack(side="left", padx=8)
 
         self.resize_grip = ResizeGrip(self.footer, self)
         self.resize_grip.pack(side="right", padx=(2, 0))
 
-        btn_refresh = tk.Label(self.footer, text="🔄 Atualizar", font=("Segoe UI", 8, "bold"), fg="#38bdf8",
-                               bg=self.theme_colors["footer_bg"], cursor="hand2")
-        btn_refresh.pack(side="right", padx=6)
-        btn_refresh.bind("<Button-1>", lambda e: self.refresh_profiles(force=True))
+        self.btn_refresh = tk.Label(self.footer, text="🔄 Atualizar", font=self.get_font(8, "bold"), fg="#38bdf8",
+                                    bg=self.theme_colors["footer_bg"], cursor="hand2")
+        self.btn_refresh.pack(side="right", padx=6)
+        self.btn_refresh.bind("<Button-1>", lambda e: self.refresh_profiles(force=True))
 
-        btn_new = tk.Label(self.footer, text="➕ Novo Perfil", font=("Segoe UI", 8, "bold"), fg="#a855f7",
-                           bg=self.theme_colors["footer_bg"], cursor="hand2")
-        btn_new.pack(side="right", padx=6)
-        btn_new.bind("<Button-1>", lambda e: self.prompt_new_profile())
+        self.btn_new = tk.Label(self.footer, text="➕ Novo Perfil", font=self.get_font(8, "bold"), fg="#a855f7",
+                                bg=self.theme_colors["footer_bg"], cursor="hand2")
+        self.btn_new.pack(side="right", padx=6)
+        self.btn_new.bind("<Button-1>", lambda e: self.prompt_new_profile())
 
     def bind_events(self):
         for widget in [self.header, self.outer_frame, self.title_lbl]:
             widget.bind("<ButtonPress-1>", self.on_drag_start)
             widget.bind("<B1-Motion>", self.on_drag_motion)
             widget.bind("<ButtonRelease-1>", self.on_drag_end)
+
+        # Mouse Wheel & Shortcut Zoom
+        self.bind("<Control-MouseWheel>", lambda e: self.adjust_zoom(0.10 if e.delta > 0 else -0.10))
+        self.bind("<Control-plus>", lambda e: self.adjust_zoom(0.10))
+        self.bind("<Control-equal>", lambda e: self.adjust_zoom(0.10))
+        self.bind("<Control-minus>", lambda e: self.adjust_zoom(-0.10))
+        self.bind("<Control-0>", lambda e: self.set_zoom(1.0))
 
     def on_drag_start(self, event):
         if not self.config_data.get("locked", False):
@@ -1016,8 +1149,9 @@ class DesktopWidget(tk.Tk):
         self.config_data["grid_preset"] = new_preset
         self.config_data["columns"] = cols
 
-        opt_w = min(max(cols * 330 + 20, 340), 1600)
-        opt_h = min(max(rows * 135 + 75, 180), 1000)
+        scale = float(self.config_data.get("ui_scale", 1.20))
+        opt_w = min(max(int(round(cols * 330 * scale + 20)), 360), 2000)
+        opt_h = min(max(int(round(rows * 135 * scale + 75)), 200), 1400)
         self.geometry(f"{opt_w}x{opt_h}")
         self.config_data["width"] = opt_w
         self.config_data["height"] = opt_h
@@ -1044,12 +1178,17 @@ class DesktopWidget(tk.Tk):
         else:
             self.show_widget()
 
-    def create_compact_bargraph(self, parent, height=18):
+    def create_compact_bargraph(self, parent, height=None):
+        scale = float(self.config_data.get("ui_scale", 1.20))
+        offset = int(self.config_data.get("font_size_offset", 1))
+        if height is None:
+            height = max(18, int(round((18 + offset * 1.5) * scale)))
+        bar_font = self.get_font(8, "bold")
         cv = tk.Canvas(parent, height=height, bg=self.theme_colors["bar_bg"], bd=0, highlightthickness=0)
         track_id = cv.create_rectangle(0, 0, 10, height, fill=self.theme_colors["bar_bg"], width=0)
         fill_id = cv.create_rectangle(0, 0, 0, height, fill="#22c55e", width=0)
-        left_id = cv.create_text(8, height // 2, text="", anchor="w", fill="#ffffff", font=("Segoe UI", 7, "bold"))
-        right_id = cv.create_text(10, height // 2, text="", anchor="e", fill="#ffffff", font=("Segoe UI", 7, "bold"))
+        left_id = cv.create_text(8, height // 2, text="", anchor="w", fill="#ffffff", font=bar_font)
+        right_id = cv.create_text(10, height // 2, text="", anchor="e", fill="#ffffff", font=bar_font)
         bar_data = {
             "cv": cv,
             "track_id": track_id,
@@ -1092,16 +1231,17 @@ class DesktopWidget(tk.Tk):
         h = d["height"]
         fill_w = int((pct / 100.0) * w)
 
+        bar_font = self.get_font(8, "bold")
         d["cv"].coords(d["track_id"], 0, 0, w, h)
         d["cv"].itemconfig(d["track_id"], fill=self.theme_colors["bar_bg"])
         d["cv"].coords(d["fill_id"], 0, 0, fill_w, h)
         d["cv"].itemconfig(d["fill_id"], fill=col)
 
         d["cv"].coords(d["left_id"], 8, h // 2)
-        d["cv"].itemconfig(d["left_id"], text=left_text)
+        d["cv"].itemconfig(d["left_id"], text=left_text, font=bar_font)
 
         d["cv"].coords(d["right_id"], w - 8, h // 2)
-        d["cv"].itemconfig(d["right_id"], text=right_text)
+        d["cv"].itemconfig(d["right_id"], text=right_text, font=bar_font)
 
     def build_profile_card(self, parent, key, prof, row, col):
         is_active = (key == pm.get_active_profile())
@@ -1117,18 +1257,18 @@ class DesktopWidget(tk.Tk):
         row_top = tk.Frame(card, bg=card_bg)
         row_top.pack(fill="x", padx=8, pady=(4, 1))
 
-        dot_lbl = tk.Label(row_top, text="●", font=("Segoe UI", 9), fg="#22c55e" if is_active else "#64748b", bg=card_bg)
+        dot_lbl = tk.Label(row_top, text="●", font=self.get_font(9), fg="#22c55e" if is_active else "#64748b", bg=card_bg)
         dot_lbl.pack(side="left", padx=(0, 4))
 
         cmd_name = get_profile_cli_command(key)
         nicknames = self.config_data.get("profile_nicknames", {})
         display_name = nicknames.get(key) or prof.get("display", key.upper())
 
-        name_lbl = tk.Label(row_top, text=f"{display_name} ({cmd_name})", font=("Segoe UI", 8, "bold"),
+        name_lbl = tk.Label(row_top, text=f"{display_name} ({cmd_name})", font=self.get_font(9, "bold"),
                             fg=th["accent"] if is_active else th["text"], bg=card_bg)
         name_lbl.pack(side="left")
 
-        tag_lbl = tk.Label(row_top, text="ATIVO", font=("Segoe UI", 6, "bold"), fg=th["tag_fg"], bg=th["tag_bg"], padx=3, pady=0)
+        tag_lbl = tk.Label(row_top, text="ATIVO", font=self.get_font(7, "bold"), fg=th["tag_fg"], bg=th["tag_bg"], padx=3, pady=0)
         if is_active:
             tag_lbl.pack(side="left", padx=4)
 
@@ -1136,14 +1276,14 @@ class DesktopWidget(tk.Tk):
         top_right = tk.Frame(row_top, bg=card_bg)
         top_right.pack(side="right")
 
-        status_lbl = tk.Label(top_right, text="", font=("Segoe UI", 7, "bold"), fg="#22c55e", bg=card_bg)
+        status_lbl = tk.Label(top_right, text="", font=self.get_font(8, "bold"), fg="#22c55e", bg=card_bg)
         status_lbl.pack(side="left", padx=(0, 4))
 
-        btn_left = tk.Label(top_right, text="◀", font=("Segoe UI", 8), fg="#64748b", bg=card_bg, cursor="hand2")
+        btn_left = tk.Label(top_right, text="◀", font=self.get_font(9), fg="#64748b", bg=card_bg, cursor="hand2")
         btn_left.pack(side="left", padx=1)
         btn_left.bind("<Button-1>", lambda e, p=key: self.shift_profile_order(p, -1))
 
-        btn_right = tk.Label(top_right, text="▶", font=("Segoe UI", 8), fg="#64748b", bg=card_bg, cursor="hand2")
+        btn_right = tk.Label(top_right, text="▶", font=self.get_font(9), fg="#64748b", bg=card_bg, cursor="hand2")
         btn_right.pack(side="left", padx=1)
         btn_right.bind("<Button-1>", lambda e, p=key: self.shift_profile_order(p, 1))
 
@@ -1151,7 +1291,7 @@ class DesktopWidget(tk.Tk):
         row_meta = tk.Frame(card, bg=card_bg)
         row_meta.pack(fill="x", padx=8, pady=(0, 3))
 
-        email_lbl = tk.Label(row_meta, text="Carregando...", font=("Segoe UI", 7), fg=th["text_muted"], bg=card_bg)
+        email_lbl = tk.Label(row_meta, text="Carregando...", font=self.get_font(8), fg=th["text_muted"], bg=card_bg)
         email_lbl.pack(side="left")
 
         models_box = tk.Frame(row_meta, bg=card_bg)
@@ -1159,31 +1299,31 @@ class DesktopWidget(tk.Tk):
 
         # Row 3: Quota 5h Compact In-Bar Bargraph
         q5_row = tk.Frame(card, bg=card_bg)
-        q5_row.pack(fill="x", padx=8, pady=(1, 2))
-        q5_bar = self.create_compact_bargraph(q5_row, height=17)
+        q5_row.pack(fill="x", padx=8, pady=(2, 2))
+        q5_bar = self.create_compact_bargraph(q5_row)
         q5_bar["cv"].pack(fill="x", expand=True)
 
         # Row 4: Quota 7d Compact In-Bar Bargraph
         qw_row = tk.Frame(card, bg=card_bg)
-        qw_row.pack(fill="x", padx=8, pady=(1, 3))
-        qw_bar = self.create_compact_bargraph(qw_row, height=17)
+        qw_row.pack(fill="x", padx=8, pady=(2, 3))
+        qw_bar = self.create_compact_bargraph(qw_row)
         qw_bar["cv"].pack(fill="x", expand=True)
 
         # Row 5: Action Buttons Row (Ultra-compact)
         btn_box = tk.Frame(card, bg=card_bg)
         btn_box.pack(fill="x", padx=8, pady=(2, 4))
 
-        btn_cmd = tk.Button(btn_box, text=f"⚡ CLI ({cmd_name})", font=("Segoe UI", 7, "bold"), fg="#ffffff", bg="#0284c7",
+        btn_cmd = tk.Button(btn_box, text=f"⚡ CLI ({cmd_name})", font=self.get_font(8, "bold"), fg="#ffffff", bg="#0284c7",
                             activebackground="#0369a1", activeforeground="#ffffff", bd=0, padx=6, pady=2, cursor="hand2",
                             command=lambda p=key: open_cmd_for_profile(p))
         btn_cmd.pack(side="left")
 
-        btn_desktop = tk.Button(btn_box, text="🖥️ Desktop", font=("Segoe UI", 7), fg="#cbd5e1", bg="#334155",
+        btn_desktop = tk.Button(btn_box, text="🖥️ Desktop", font=self.get_font(8), fg="#cbd5e1", bg="#334155",
                                 activebackground="#475569", activeforeground="#ffffff", bd=0, padx=5, pady=2, cursor="hand2",
                                 command=lambda p=key: pm.cmd_desktop(p))
         btn_desktop.pack(side="left", padx=3)
 
-        btn_activate = tk.Button(btn_box, text="Ativar", font=("Segoe UI", 7), fg="#a855f7", bg="#2e1065",
+        btn_activate = tk.Button(btn_box, text="Ativar", font=self.get_font(8, "bold"), fg="#a855f7", bg="#2e1065",
                                  activebackground="#3b0764", activeforeground="#ffffff", bd=0, padx=5, pady=2, cursor="hand2",
                                  command=lambda p=key: self.switch_profile_and_refresh(p))
         if not is_active:
@@ -1240,15 +1380,15 @@ class DesktopWidget(tk.Tk):
         nicknames = self.config_data.get("profile_nicknames", {})
         display_name = nicknames.get(key) or prof.get("display", key.upper())
         cmd_name = get_profile_cli_command(key)
-        view["name_lbl"].config(text=f"{display_name} ({cmd_name})", fg=th["accent"] if is_active else th["text"], bg=card_bg)
+        view["name_lbl"].config(text=f"{display_name} ({cmd_name})", fg=th["accent"] if is_active else th["text"], bg=card_bg, font=self.get_font(9, "bold"))
 
         raw_email = info.get("email", "Desconhecido")
         email_str = mask_email(raw_email) if self.config_data.get("privacy_mode", False) else raw_email
-        view["email_lbl"].config(text=email_str, bg=card_bg)
+        view["email_lbl"].config(text=email_str, bg=card_bg, font=self.get_font(8))
 
         status_text = "✓ Conectado" if info.get("has_oauth") else "⚠️ Reautenticar"
         status_col = "#22c55e" if info.get("has_oauth") else "#eab308"
-        view["status_lbl"].config(text=status_text, fg=status_col, bg=card_bg)
+        view["status_lbl"].config(text=status_text, fg=status_col, bg=card_bg, font=self.get_font(8, "bold"))
 
         # Update Model Badges (Argon, GPT, Gemini, Claude, etc.)
         for w in view["models_box"].winfo_children():
@@ -1277,9 +1417,9 @@ class DesktopWidget(tk.Tk):
             else:
                 m_bg, m_fg, m_border, m_icon = "#172554", "#bfdbfe", "#2563eb", "★ "
 
-            pill = tk.Label(view["models_box"], text=f"{m_icon}{m}", font=("Segoe UI", 6, "bold"),
+            pill = tk.Label(view["models_box"], text=f"{m_icon}{m}", font=self.get_font(7, "bold"),
                             fg=m_fg, bg=m_bg, bd=1, relief="solid", highlightbackground=m_border, highlightthickness=1,
-                            padx=3, pady=0)
+                            padx=4, pady=1)
             pill.pack(side="left", padx=(0, 2))
 
         # 5h Quota in-bar update
