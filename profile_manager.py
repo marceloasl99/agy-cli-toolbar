@@ -14,6 +14,7 @@ PROFILES_BASE_DIR = os.path.join(USER_HOME, ".agy-perfis")
 CUSTOM_DIR = os.path.join(USER_HOME, ".antigravity-custom")
 ACTIVE_PROFILE_FILE = os.path.join(CUSTOM_DIR, "active_profile.json")
 QUOTAS_CACHE_FILE = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
+WORKDIRS_FILE = os.path.join(CUSTOM_DIR, "profile_workdirs.json")
 AGY_BIN_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.join(USER_HOME, "AppData", "Local")), "agy", "bin")
 CUSTOM_BIN_DIR = os.path.join(CUSTOM_DIR, "bin")
 DESKTOP_EXE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.join(USER_HOME, "AppData", "Local")), "Programs", "antigravity", "Antigravity.exe")
@@ -1056,6 +1057,188 @@ def interactive_menu():
         else:
             print(f"{RED}Opção inválida.{RESET}")
 
+# ─────────────────────────── WORKDIR / TRUSTED FOLDER ───────────────────────────
+
+def load_workdirs():
+    """Returns dict of {profile_name: [path, ...]}."""
+    if os.path.exists(WORKDIRS_FILE):
+        try:
+            with open(WORKDIRS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_workdirs(data):
+    os.makedirs(CUSTOM_DIR, exist_ok=True)
+    with open(WORKDIRS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+def get_workdir_for_profile(profile_name):
+    """Returns the active (first) working dir for a profile, or None."""
+    wds = load_workdirs()
+    entry = wds.get(profile_name)
+    if not entry:
+        return None
+    if isinstance(entry, list):
+        return entry[0] if entry else None
+    return entry  # plain string (legacy)
+
+def print_workdir_path(profile_name):
+    """Outputs only the working dir path (called by .cmd launchers)."""
+    d = get_workdir_for_profile(profile_name)
+    if d and os.path.isdir(d):
+        print(d)
+    else:
+        print("")
+
+def cmd_workdir_set(profile_name, path):
+    """Sets a trusted folder as the default for a profile."""
+    path = os.path.expandvars(os.path.expanduser(path.strip().strip('"').strip("'")))
+    if not os.path.isdir(path):
+        print(f"{YELLOW}[!] Diretório não encontrado: {path}{RESET}")
+        create = input("Deseja criar este diretório? [s/N]: ").strip().lower()
+        if create in ("s", "sim", "y", "yes"):
+            os.makedirs(path, exist_ok=True)
+            print(f"{GREEN}[✓] Diretório criado: {path}{RESET}")
+        else:
+            print("Operação cancelada.")
+            return False
+
+    wds = load_workdirs()
+    entry = wds.get(profile_name, [])
+    if isinstance(entry, str):
+        entry = [entry]
+    # Put the new path at front (default), remove duplicates
+    if path in entry:
+        entry.remove(path)
+    entry.insert(0, path)
+    wds[profile_name] = entry
+    save_workdirs(wds)
+    print(f"\n{BOLD}{GREEN}[✓] Pasta de trabalho padrão definida para '{profile_name}':{RESET}")
+    print(f"    📂 {CYAN}{path}{RESET}")
+    print(f"\n{GRAY}Próxima vez que abrir '{profile_name}', o CLI iniciará nesta pasta.{RESET}\n")
+    return True
+
+def cmd_workdir_add(profile_name, path):
+    """Adds a trusted folder to a profile's list."""
+    path = os.path.expandvars(os.path.expanduser(path.strip().strip('"').strip("'")))
+    if not os.path.isdir(path):
+        print(f"{YELLOW}[!] Diretório não encontrado: {path}{RESET}")
+        create = input("Deseja criar este diretório? [s/N]: ").strip().lower()
+        if create in ("s", "sim", "y", "yes"):
+            os.makedirs(path, exist_ok=True)
+        else:
+            print("Operação cancelada.")
+            return False
+
+    wds = load_workdirs()
+    entry = wds.get(profile_name, [])
+    if isinstance(entry, str):
+        entry = [entry]
+    if path not in entry:
+        entry.append(path)
+    wds[profile_name] = entry
+    save_workdirs(wds)
+    print(f"{GREEN}[✓] '{path}' adicionado às pastas de '{profile_name}'.{RESET}")
+    return True
+
+def cmd_workdir_remove(profile_name, path=None):
+    """Removes a trusted folder from a profile."""
+    wds = load_workdirs()
+    entry = wds.get(profile_name, [])
+    if isinstance(entry, str):
+        entry = [entry]
+
+    if not entry:
+        print(f"{YELLOW}[!] Nenhuma pasta configurada para '{profile_name}'.{RESET}")
+        return False
+
+    if path:
+        path = os.path.expandvars(os.path.expanduser(path.strip().strip('"').strip("'")))
+        if path in entry:
+            entry.remove(path)
+            wds[profile_name] = entry
+            save_workdirs(wds)
+            print(f"{GREEN}[✓] Pasta '{path}' removida de '{profile_name}'.{RESET}")
+        else:
+            print(f"{YELLOW}[!] Pasta '{path}' não encontrada na lista de '{profile_name}'.{RESET}")
+    else:
+        print(f"\n{BOLD}Pastas configuradas para '{profile_name}':{RESET}")
+        for i, p in enumerate(entry, 1):
+            print(f"  [{i}] {p}")
+        choice = input("Número para remover (Enter para cancelar): ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(entry):
+            removed = entry.pop(int(choice) - 1)
+            wds[profile_name] = entry
+            save_workdirs(wds)
+            print(f"{GREEN}[✓] '{removed}' removida.{RESET}")
+        else:
+            print("Cancelado.")
+    return True
+
+def cmd_workdir_list(profile_name=None):
+    """Lists trusted folders for one or all profiles."""
+    wds = load_workdirs()
+    if not wds:
+        print(f"\n{YELLOW}[i] Nenhuma pasta de trabalho configurada ainda.{RESET}")
+        print(f"    Use: {CYAN}agy-profile workdir set <perfil> <caminho>{RESET}\n")
+        return
+
+    targets = {profile_name: wds[profile_name]} if (profile_name and profile_name in wds) else wds
+    print(f"\n{BOLD}{CYAN}📂 PASTAS DE TRABALHO CONFIGURADAS{RESET}\n")
+    for pname, entry in targets.items():
+        dirs = entry if isinstance(entry, list) else [entry]
+        print(f"  {BOLD}{WHITE}{pname}{RESET}")
+        for i, d in enumerate(dirs):
+            tag = f"  {GREEN}← padrão{RESET}" if i == 0 else ""
+            exists_tag = "" if os.path.isdir(d) else f"  {RED}[não encontrado]{RESET}"
+            print(f"    [{i+1}] {d}{tag}{exists_tag}")
+    print()
+
+def cmd_workdir_choose(profile_name):
+    """Interactive: pick which saved folder to open (called on CLI launch if no default)."""
+    wds = load_workdirs()
+    entry = wds.get(profile_name, [])
+    if isinstance(entry, str):
+        entry = [entry]
+
+    if not entry:
+        print(f"\n{YELLOW}[i] Nenhuma pasta configurada para '{profile_name}'.{RESET}")
+        new_path = input(f"Digite o caminho da pasta (Enter para usar o atual '{os.getcwd()}'): ").strip()
+        if not new_path:
+            new_path = os.getcwd()
+        cmd_workdir_set(profile_name, new_path)
+        return new_path
+
+    print(f"\n{BOLD}{CYAN}📂 Escolha a pasta de trabalho para '{profile_name}':{RESET}\n")
+    for i, d in enumerate(entry, 1):
+        exists_tag = "" if os.path.isdir(d) else f"  {RED}(não encontrado){RESET}"
+        default_tag = f"  {GREEN}← padrão{RESET}" if i == 1 else ""
+        print(f"  [{i}] {d}{default_tag}{exists_tag}")
+    print(f"  [N] Adicionar nova pasta")
+    print(f"  [Enter] Usar padrão: {CYAN}{entry[0]}{RESET}\n")
+
+    choice = input("Opção: ").strip().lower()
+    if choice == "" or choice == "1":
+        return entry[0]
+    elif choice == "n":
+        new_path = input("Novo caminho: ").strip()
+        if new_path:
+            cmd_workdir_set(profile_name, new_path)
+            return new_path
+    elif choice.isdigit() and 1 <= int(choice) <= len(entry):
+        selected = entry[int(choice) - 1]
+        # Promote to default
+        entry.remove(selected)
+        entry.insert(0, selected)
+        wds[profile_name] = entry
+        save_workdirs(wds)
+        return selected
+    return entry[0]
+
+# ──────────────────────────────────────────────────────────────────────────────
+
 def main():
     if len(sys.argv) == 1:
         interactive_menu()
@@ -1112,16 +1295,56 @@ def main():
             cmd_run(sys.argv[2], sys.argv[3:])
         else:
             print("Uso: agy-profile run <perfil> [argumentos do agy...]")
-    elif subcmd in ("tray", "widget", "gui"):
+    elif subcmd in ("tray", "widget"):
         cmd_tray()
     elif subcmd in ("autostart", "startup"):
         enable = True
         if len(sys.argv) > 2:
             enable = sys.argv[2].lower() in ("on", "1", "true", "enable", "sim", "s")
         cmd_autostart(enable)
+    elif subcmd in ("workdir", "dir", "folder", "trusted", "setdir"):
+        # agy-profile workdir set <profile> <path>
+        # agy-profile workdir add <profile> <path>
+        # agy-profile workdir remove <profile> [path]
+        # agy-profile workdir list [profile]
+        # agy-profile workdir choose <profile>
+        # agy-profile workdir get <profile>   (outputs path only, for .cmd launchers)
+        action = sys.argv[2].lower() if len(sys.argv) > 2 else "list"
+        if action in ("set", "define", "default", "setdir"):
+            profile_arg = sys.argv[3] if len(sys.argv) > 3 else get_active_profile()
+            path_arg = sys.argv[4] if len(sys.argv) > 4 else None
+            if not path_arg:
+                print(f"Pasta atual (Enter para usar): {os.getcwd()}")
+                path_arg = input("Caminho da pasta: ").strip() or os.getcwd()
+            cmd_workdir_set(profile_arg, path_arg)
+        elif action == "add":
+            profile_arg = sys.argv[3] if len(sys.argv) > 3 else get_active_profile()
+            path_arg = sys.argv[4] if len(sys.argv) > 4 else input("Caminho da pasta: ").strip()
+            cmd_workdir_add(profile_arg, path_arg)
+        elif action in ("remove", "rm", "del"):
+            profile_arg = sys.argv[3] if len(sys.argv) > 3 else get_active_profile()
+            path_arg = sys.argv[4] if len(sys.argv) > 4 else None
+            cmd_workdir_remove(profile_arg, path_arg)
+        elif action == "list":
+            profile_arg = sys.argv[3] if len(sys.argv) > 3 else None
+            cmd_workdir_list(profile_arg)
+        elif action == "choose":
+            profile_arg = sys.argv[3] if len(sys.argv) > 3 else get_active_profile()
+            result = cmd_workdir_choose(profile_arg)
+            if result:
+                print(f"Pasta selecionada: {result}")
+        elif action == "get":
+            profile_arg = sys.argv[3] if len(sys.argv) > 3 else get_active_profile()
+            print_workdir_path(profile_arg)
+        else:
+            # treat action as profile name, path as next arg
+            if len(sys.argv) > 3:
+                cmd_workdir_set(action, sys.argv[3])
+            else:
+                cmd_workdir_list(action)
     else:
         print(f"Comando desconhecido: {subcmd}")
-        print("Comandos disponíveis: list, switch, create, delete, auth, desktop, run, tray, autostart")
+        print("Comandos disponíveis: list, switch, create, delete, auth, desktop, run, tray, autostart, workdir")
 
 if __name__ == "__main__":
     main()

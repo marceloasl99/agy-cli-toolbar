@@ -5,20 +5,23 @@ bin_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.join(user_home, "A
 profiles_base = os.path.join(user_home, ".agy-perfis")
 
 files = {
-    "agy.cmd": ("perfil1", os.path.join(profiles_base, "perfil1")),
+    "agy.cmd":  ("perfil1", os.path.join(profiles_base, "perfil1")),
     "agy1.cmd": ("perfil1", os.path.join(profiles_base, "perfil1")),
     "agy2.cmd": ("perfil2", os.path.join(profiles_base, "perfil2")),
     "agy3.cmd": ("perfil3", os.path.join(profiles_base, "perfil3")),
     "agy4.cmd": ("perfil4", os.path.join(profiles_base, "perfil4")),
-    "agy5.cmd": ("agy5", os.path.join(profiles_base, "agy5")),
-    "agy6.cmd": ("agy6", os.path.join(profiles_base, "agy6")),
+    "agy5.cmd": ("agy5",    os.path.join(profiles_base, "agy5")),
+    "agy6.cmd": ("agy6",    os.path.join(profiles_base, "agy6")),
 }
 
-custom_script = os.path.join(user_home, ".antigravity-custom", "profile_manager.py").replace("\\", "\\\\")
+# Path to the profile manager script (deployed location)
+custom_script = os.path.join(user_home, ".antigravity-custom", "profile_manager.py")
+# Use double-backslash in the .cmd content
+custom_script_cmd = custom_script.replace("\\", "\\\\")
 
 for fname, (pname, proot) in files.items():
     fpath = os.path.join(bin_dir, fname)
-    homepath = proot[2:]
+    homepath = proot[2:]  # strip drive letter for HOMEPATH
     content = f"""@echo off
 setlocal
 set "AGY_PROFILE={pname}"
@@ -38,11 +41,19 @@ if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%" >nul 2>&1
 if not exist "%ANTIGRAVITY_GEMINI_DIR%" mkdir "%ANTIGRAVITY_GEMINI_DIR%" >nul 2>&1
 if not exist "%ANTIGRAVITY_APP_DATA_DIR%" mkdir "%ANTIGRAVITY_APP_DATA_DIR%" >nul 2>&1
 
-python "{custom_script}" pre-run {pname}
+python "{custom_script_cmd}" pre-run {pname}
+
+:: Apply trusted working directory for this profile (if configured)
+for /f "usebackq delims=" %%D in (`python "{custom_script_cmd}" workdir get {pname} 2^>nul`) do (
+    if not "%%D"=="" (
+        echo [agy] Opening in: %%D
+        cd /d "%%D"
+    )
+)
 
 "%~dp0agy.exe" %*
 
-python "{custom_script}" post-run {pname}
+python "{custom_script_cmd}" post-run {pname}
 endlocal
 """
     try:
@@ -51,3 +62,6 @@ endlocal
         print(f"Updated {fname} -> {pname}")
     except Exception as e:
         print(f"Failed {fname}: {e}")
+
+print("\nAll launchers updated successfully.")
+print(f"Bin dir: {bin_dir}")
