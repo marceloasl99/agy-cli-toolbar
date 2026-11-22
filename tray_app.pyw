@@ -1672,17 +1672,24 @@ def enforce_single_instance_or_wake():
         kernel32 = ctypes.windll.kernel32
         mutex = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
         last_err = kernel32.GetLastError()
-        if last_err == 183:  # ERROR_ALREADY_EXISTS: Another instance is running!
+        if last_err == 183:  # ERROR_ALREADY_EXISTS: Check if existing instance is actually alive
+            contacted = False
             try:
                 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                client.settimeout(2.5)
+                client.settimeout(1.5)
                 client.connect(("127.0.0.1", SINGLE_INSTANCE_PORT))
                 client.sendall(b"SHOW\n")
-                client.recv(1024)
+                ack = client.recv(1024)
+                if ack:
+                    contacted = True
                 client.close()
             except Exception:
-                pass
-            sys.exit(0)
+                contacted = False
+
+            if contacted:
+                # Successfully signaled existing instance!
+                sys.exit(0)
+            # If not contacted, the previous instance died or hung, so take over!
     except Exception:
         pass
 
