@@ -145,6 +145,7 @@ DEFAULT_WIDGET_CONFIG = {
     "opacity": 0.96,
     "theme": "Dark Slate",
     "privacy_mode": False,
+    "default_expanded": False,
     "card_density": "compact",
     "alert_threshold": 85,
     "show_free_pct": True,
@@ -262,6 +263,76 @@ def create_tray_image(color=(56, 189, 248)):
     d.ellipse([29, 29, 35, 35], fill=color)
     return img
 
+class ToolTip:
+    """Floating styled tooltip that appears on hover with rich quota model info."""
+    def __init__(self, widget, text_func):
+        self.widget = widget
+        self.text_func = text_func
+        self.tip_window = None
+        self.widget.bind("<Enter>", self.show_tip)
+        self.widget.bind("<Leave>", self.hide_tip)
+        self.widget.bind("<ButtonPress>", self.hide_tip)
+
+    def show_tip(self, event=None):
+        if self.tip_window:
+            return
+        text = self.text_func() if callable(self.text_func) else self.text_func
+        if not text:
+            return
+        x = self.widget.winfo_rootx() + 15
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        tw.attributes("-topmost", True)
+        frame = tk.Frame(tw, bg="#0b1120", bd=1, relief="solid", highlightbackground="#38bdf8", highlightthickness=1)
+        frame.pack(fill="both", expand=True)
+        label = tk.Label(frame, text=text, justify="left", font=("Segoe UI", 8),
+                         bg="#0b1120", fg="#f8fafc", padx=10, pady=8)
+        label.pack()
+
+    def hide_tip(self, event=None):
+        if self.tip_window:
+            try:
+                self.tip_window.destroy()
+            except Exception:
+                pass
+            self.tip_window = None
+
+class ScrollableFrame(tk.Frame):
+    """Reusable scrollable frame ensuring all config contents fit on any screen."""
+    def __init__(self, parent, bg="#0f172a"):
+        super().__init__(parent, bg=bg)
+        self.canvas = tk.Canvas(self, bg=bg, bd=0, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollable_window = tk.Frame(self.canvas, bg=bg)
+
+        self.scrollable_window.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+
+        self.canvas_frame_id = self.canvas.create_window((0, 0), window=self.scrollable_window, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+        self.bind_mousewheel(self)
+
+    def _on_canvas_configure(self, event):
+        self.canvas.itemconfig(self.canvas_frame_id, width=event.width)
+
+    def bind_mousewheel(self, widget):
+        widget.bind("<MouseWheel>", self._on_mousewheel)
+        for child in widget.winfo_children():
+            self.bind_mousewheel(child)
+
+    def _on_mousewheel(self, event):
+        if self.canvas.winfo_exists():
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
 class ResizeGrip(tk.Label):
     def __init__(self, parent, target_window):
         super().__init__(parent, text="◢", font=("Segoe UI", 11), fg="#64748b", bg="#1e293b", cursor="size_nw_se")
@@ -293,8 +364,8 @@ class SettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("Configurações Avançadas - Antigravity Quota Manager")
-        self.geometry("760x580")
-        self.minsize(680, 500)
+        self.geometry("880x640")
+        self.minsize(760, 520)
         self.configure(bg="#0f172a")
         self.attributes("-topmost", True)
 
@@ -318,7 +389,7 @@ class SettingsDialog(tk.Toplevel):
         body.pack(fill="both", expand=True)
 
         # Sidebar
-        sidebar = tk.Frame(body, bg="#0b1120", width=190)
+        sidebar = tk.Frame(body, bg="#0b1120", width=195)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
@@ -343,11 +414,11 @@ class SettingsDialog(tk.Toplevel):
             btn.pack(fill="x", padx=6, pady=2)
             self.tab_buttons[tab_id] = btn
 
-        # Content Container
+        # Content Container (Hosts the active ScrollableFrame)
         self.content_container = tk.Frame(body, bg="#0f172a")
-        self.content_container.pack(side="right", fill="both", expand=True, padx=20, pady=14)
+        self.content_container.pack(side="right", fill="both", expand=True, padx=14, pady=10)
 
-        # Build each tab view
+        # Build each tab view using ScrollableFrame
         self.build_tab_appearance()
         self.build_tab_profiles()
         self.build_tab_quotas()
@@ -384,11 +455,12 @@ class SettingsDialog(tk.Toplevel):
 
     # ---------------- TAB: APARÊNCIA & GRADE ----------------
     def build_tab_appearance(self):
-        f = tk.Frame(self.content_container, bg="#0f172a")
-        self.tab_frames["appearance"] = f
+        sf = ScrollableFrame(self.content_container, bg="#0f172a")
+        self.tab_frames["appearance"] = sf
+        f = sf.scrollable_window
 
         tk.Label(f, text="Aparência Visual & Layout", font=("Segoe UI", 12, "bold"), fg="#f8fafc", bg="#0f172a").pack(anchor="w", pady=(0, 4))
-        tk.Label(f, text="Personalize o formato da grade, temas e densidade dos blocos de perfil.", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(0, 14))
+        tk.Label(f, text="Personalize o formato da grade, temas, zoom e modo de detalhamento dos cartões.", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(0, 14))
 
         # Presets Buttons Grid
         tk.Label(f, text="📐 Presets de Grade Rápidos:", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w")
@@ -420,7 +492,7 @@ class SettingsDialog(tk.Toplevel):
         # Theme Selector
         tk.Label(f, text="🎨 Tema de Cores:", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(12, 4))
         self.theme_var = tk.StringVar(value=self.config_copy.get("theme", "Dark Slate"))
-        cb_theme = ttk.Combobox(f, textvariable=self.theme_var, values=list(THEMES.keys()), state="readonly", width=22, font=("Segoe UI", 9))
+        cb_theme = ttk.Combobox(f, textvariable=self.theme_var, values=list(THEMES.keys()), state="readonly", width=24, font=("Segoe UI", 9))
         cb_theme.pack(anchor="w")
 
         # Opacity Slider
@@ -445,18 +517,19 @@ class SettingsDialog(tk.Toplevel):
                        variable=self.priv_var, font=("Segoe UI", 9), fg="#e2e8f0", bg="#0f172a",
                        selectcolor="#1e293b", activebackground="#0f172a", activeforeground="#e2e8f0").pack(anchor="w")
 
-        # Card Density Mode
-        tk.Label(f, text="📊 Densidade do Cartão:", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(10, 2))
-        self.density_var = tk.StringVar(value=self.config_copy.get("card_density", "detailed"))
-        f_den = tk.Frame(f, bg="#0f172a")
-        f_den.pack(fill="x")
-        tk.Radiobutton(f_den, text="Detalhado (Barras completas + countdowns + atalhos)", variable=self.density_var, value="detailed",
-                       font=("Segoe UI", 8), fg="#cbd5e1", bg="#0f172a", selectcolor="#1e293b").pack(side="left", padx=(0, 14))
-        tk.Radiobutton(f_den, text="Compacto (Visual Slim)", variable=self.density_var, value="compact",
-                       font=("Segoe UI", 8), fg="#cbd5e1", bg="#0f172a", selectcolor="#1e293b").pack(side="left")
+        # Expand / Detail Default Mode
+        f_detail = tk.Frame(f, bg="#0f172a")
+        f_detail.pack(fill="x", pady=(4, 4))
+        self.default_expanded_var = tk.BooleanVar(value=self.config_copy.get("default_expanded", False))
+        tk.Checkbutton(f_detail, text="Abrir cartões no Modo Detalhado (Mostra modelos cobertos diretamente)",
+                       variable=self.default_expanded_var, font=("Segoe UI", 9), fg="#e2e8f0", bg="#0f172a",
+                       selectcolor="#1e293b", activebackground="#0f172a", activeforeground="#e2e8f0").pack(anchor="w")
+
+        # Density preference
+        self.density_var = tk.StringVar(value=self.config_copy.get("card_density", "compact"))
 
         # Zoom & Font Size Adjustment
-        tk.Label(f, text="🔍 Zoom da Interface (Escala Geral):", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(12, 2))
+        tk.Label(f, text="🔍 Zoom da Interface (Escala Geral):", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(14, 2))
         f_zoom = tk.Frame(f, bg="#0f172a")
         f_zoom.pack(fill="x")
 
@@ -477,9 +550,9 @@ class SettingsDialog(tk.Toplevel):
                       activebackground="#0284c7", bd=0, padx=6, pady=2, cursor="hand2",
                       command=lambda val=z_pct: self.apply_zoom_preset(val)).pack(side="left", padx=2)
 
-        tk.Label(f, text="🔤 Tamanho da Fonte (Ajuste Fino):", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(8, 2))
+        tk.Label(f, text="🔤 Tamanho da Fonte (Ajuste Fino):", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(10, 2))
         f_fnt = tk.Frame(f, bg="#0f172a")
-        f_fnt.pack(fill="x", pady=(2, 4))
+        f_fnt.pack(fill="x", pady=(2, 10))
         self.font_offset_var = tk.IntVar(value=int(self.config_copy.get("font_size_offset", 1)))
         
         font_options = [
@@ -492,6 +565,8 @@ class SettingsDialog(tk.Toplevel):
         for val, label in font_options:
             tk.Radiobutton(f_fnt, text=label, variable=self.font_offset_var, value=val,
                            font=("Segoe UI", 8), fg="#cbd5e1", bg="#0f172a", selectcolor="#1e293b").pack(side="left", padx=(0, 6))
+
+        sf.bind_mousewheel(f)
 
     def apply_zoom_preset(self, val):
         self.zoom_var.set(val)
@@ -507,15 +582,16 @@ class SettingsDialog(tk.Toplevel):
 
     # ---------------- TAB: PERFIS & ORDEM ----------------
     def build_tab_profiles(self):
-        f = tk.Frame(self.content_container, bg="#0f172a")
-        self.tab_frames["profiles"] = f
+        sf = ScrollableFrame(self.content_container, bg="#0f172a")
+        self.tab_frames["profiles"] = sf
+        f = sf.scrollable_window
 
         tk.Label(f, text="Gerenciador de Perfis", font=("Segoe UI", 12, "bold"), fg="#f8fafc", bg="#0f172a").pack(anchor="w", pady=(0, 4))
-        tk.Label(f, text="Organize a sequência dos blocos, altere apelidos e controle a visibilidade.", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(0, 10))
+        tk.Label(f, text="Organize a sequência dos blocos, altere apelidos e ative o plano Pro (Argon).", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(0, 10))
 
         # Main horizontal container
         f_box = tk.Frame(f, bg="#0f172a")
-        f_box.pack(fill="both", expand=True)
+        f_box.pack(fill="x", expand=True)
 
         all_profiles = pm.discover_profiles()
         saved_order = self.config_copy.get("profile_order", [])
@@ -524,10 +600,10 @@ class SettingsDialog(tk.Toplevel):
             if k not in self.ordered_keys:
                 self.ordered_keys.append(k)
 
-        # Listbox with custom scrollbar
+        # Listbox
         self.prof_listbox = tk.Listbox(
             f_box, font=("Segoe UI", 9), bg="#1e293b", fg="#f8fafc", selectbackground="#0284c7",
-            selectforeground="#ffffff", bd=1, relief="solid", highlightthickness=0
+            selectforeground="#ffffff", bd=1, relief="solid", highlightthickness=0, height=8
         )
         self.prof_listbox.pack(side="left", fill="both", expand=True)
 
@@ -535,22 +611,23 @@ class SettingsDialog(tk.Toplevel):
         f_btns = tk.Frame(f_box, bg="#0f172a")
         f_btns.pack(side="right", fill="y", padx=(10, 0))
 
-        tk.Button(f_btns, text="▲ Subir", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#334155", bd=0, padx=12, pady=4, cursor="hand2", command=self.move_prof_up).pack(fill="x", pady=2)
-        tk.Button(f_btns, text="▼ Descer", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#334155", bd=0, padx=12, pady=4, cursor="hand2", command=self.move_prof_down).pack(fill="x", pady=2)
-        tk.Button(f_btns, text="👁 Toggle Visível", font=("Segoe UI", 8, "bold"), fg="#38bdf8", bg="#0c4a6e", bd=0, padx=12, pady=4, cursor="hand2", command=self.toggle_prof_enable).pack(fill="x", pady=(8, 2))
-        tk.Button(f_btns, text="🤖 Modelos da Conta", font=("Segoe UI", 8, "bold"), fg="#34d399", bg="#064e3b", bd=0, padx=12, pady=4, cursor="hand2", command=self.edit_profile_models).pack(fill="x", pady=2)
-        tk.Button(f_btns, text="✏️ Renomear Apelido", font=("Segoe UI", 8), fg="#e2e8f0", bg="#1e293b", bd=0, padx=12, pady=4, cursor="hand2", command=self.rename_profile_nickname).pack(fill="x", pady=2)
-        tk.Button(f_btns, text="📂 Abrir Pasta", font=("Segoe UI", 8), fg="#e2e8f0", bg="#1e293b", bd=0, padx=12, pady=4, cursor="hand2", command=self.open_selected_profile_folder).pack(fill="x", pady=2)
-        tk.Button(f_btns, text="➕ Novo Perfil...", font=("Segoe UI", 8, "bold"), fg="#a855f7", bg="#2e1065", bd=0, padx=12, pady=5, cursor="hand2", command=self.prompt_new_profile_dialog).pack(fill="x", pady=(12, 2))
+        tk.Button(f_btns, text="▲ Subir", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#334155", bd=0, padx=12, pady=3, cursor="hand2", command=self.move_prof_up).pack(fill="x", pady=2)
+        tk.Button(f_btns, text="▼ Descer", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#334155", bd=0, padx=12, pady=3, cursor="hand2", command=self.move_prof_down).pack(fill="x", pady=2)
+        tk.Button(f_btns, text="👁 Toggle Visível", font=("Segoe UI", 8, "bold"), fg="#38bdf8", bg="#0c4a6e", bd=0, padx=12, pady=3, cursor="hand2", command=self.toggle_prof_enable).pack(fill="x", pady=(6, 2))
+        tk.Button(f_btns, text="🌟 Alternar Pro (Argon)", font=("Segoe UI", 8, "bold"), fg="#e9d5ff", bg="#581c87", bd=0, padx=12, pady=3, cursor="hand2", command=self.toggle_prof_pro).pack(fill="x", pady=2)
+        tk.Button(f_btns, text="✏️ Renomear Apelido", font=("Segoe UI", 8), fg="#e2e8f0", bg="#1e293b", bd=0, padx=12, pady=3, cursor="hand2", command=self.rename_profile_nickname).pack(fill="x", pady=2)
+        tk.Button(f_btns, text="📂 Abrir Pasta", font=("Segoe UI", 8), fg="#e2e8f0", bg="#1e293b", bd=0, padx=12, pady=3, cursor="hand2", command=self.open_selected_profile_folder).pack(fill="x", pady=2)
+        tk.Button(f_btns, text="➕ Novo Perfil...", font=("Segoe UI", 8, "bold"), fg="#a855f7", bg="#2e1065", bd=0, padx=12, pady=4, cursor="hand2", command=self.prompt_new_profile_dialog).pack(fill="x", pady=(8, 2))
 
         self.refresh_profile_listbox()
+        sf.bind_mousewheel(f)
 
     def refresh_profile_listbox(self):
         self.prof_listbox.delete(0, tk.END)
         all_profiles = pm.discover_profiles()
         en_dict = self.config_copy.get("enabled_profiles", {})
         nicknames = self.config_copy.get("profile_nicknames", {})
-        prof_models = self.config_copy.get("profile_models", {})
+        pro_dict = self.config_copy.get("pro_profiles", {"perfil4": True})
 
         for k in self.ordered_keys:
             is_en = en_dict.get(k, True)
@@ -560,30 +637,20 @@ class SettingsDialog(tk.Toplevel):
             cmd = get_profile_cli_command(k)
             info = pm.get_profile_info(prof)
             email = info.get("email", "Sem conta")
-            models = prof_models.get(k) or info.get("models", [])
-            m_str = f" [{', '.join(models)}]" if models else ""
-            self.prof_listbox.insert(tk.END, f" {mark}  {disp}  [{cmd}]  —  {email}{m_str}")
+            is_pro = pro_dict.get(k, k == "perfil4")
+            pro_badge = " [PRO / ARGON]" if is_pro else " [PADRÃO]"
+            self.prof_listbox.insert(tk.END, f" {mark}  {disp}  [{cmd}]  —  {email}{pro_badge}")
 
-    def edit_profile_models(self):
+    def toggle_prof_pro(self):
         sel = self.prof_listbox.curselection()
         if not sel:
             return
         k = self.ordered_keys[sel[0]]
-        prof_models_dict = self.config_copy.setdefault("profile_models", {})
-        current_models = prof_models_dict.get(k, [])
-        if not current_models:
-            all_profs = pm.discover_profiles()
-            info = pm.get_profile_info(all_profs.get(k, {}))
-            current_models = info.get("models", ["Gemini 2.5 Pro"])
-        current_str = ", ".join(current_models)
-        new_str = simpledialog.askstring("Modelos do Perfil",
-                                         f"Modelos suportados por {k} (separados por vírgula):\nEx: Argon, GPT-4o, Gemini 2.5 Pro",
-                                         initialvalue=current_str, parent=self)
-        if new_str is not None:
-            models_list = [m.strip() for m in new_str.split(",") if m.strip()]
-            prof_models_dict[k] = models_list
-            self.refresh_profile_listbox()
-            self.prof_listbox.selection_set(sel[0])
+        pro_dict = self.config_copy.setdefault("pro_profiles", {"perfil4": True})
+        cur = pro_dict.get(k, k == "perfil4")
+        pro_dict[k] = not cur
+        self.refresh_profile_listbox()
+        self.prof_listbox.selection_set(sel[0])
 
     def move_prof_up(self):
         sel = self.prof_listbox.curselection()
@@ -646,11 +713,29 @@ class SettingsDialog(tk.Toplevel):
 
     # ---------------- TAB: COTAS & ALERTAS ----------------
     def build_tab_quotas(self):
-        f = tk.Frame(self.content_container, bg="#0f172a")
-        self.tab_frames["quotas"] = f
+        sf = ScrollableFrame(self.content_container, bg="#0f172a")
+        self.tab_frames["quotas"] = sf
+        f = sf.scrollable_window
 
         tk.Label(f, text="Monitoramento de Cotas & Alertas", font=("Segoe UI", 12, "bold"), fg="#f8fafc", bg="#0f172a").pack(anchor="w", pady=(0, 4))
-        tk.Label(f, text="Ajuste o ciclo de telemetria, limiares de aviso e indicadores de capacidade.", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(0, 14))
+        tk.Label(f, text="Entenda as cotas oficiais do Antigravity e configure limiares e tempos de telemetria.", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(0, 10))
+
+        # Antigravity Quotas Explanation Card
+        card_info = tk.Frame(f, bg="#1e293b", bd=1, relief="solid", highlightbackground="#334155", highlightthickness=1)
+        card_info.pack(fill="x", pady=(0, 12))
+
+        tk.Label(card_info, text="📌 ESTRUTURA OFICIAL DE COTAS DO ANTIGRAVITY", font=("Segoe UI", 8, "bold"), fg="#38bdf8", bg="#1e293b").pack(anchor="w", padx=10, pady=(8, 4))
+        
+        rows_expl = [
+            ("★ Cota Gemini", "Modelos: Gemini 2.5 Pro, 2.5 Flash, 3.8 Flash, Thinking\nJanela móvel de 5 horas e limite semanal compartilhado."),
+            ("⚡ Cota Outros (3P)", "Modelos: GPT-4o, GPT-4o-mini, Claude 3.5 Sonnet, Claude 3.7 Sonnet, o3-mini\nCota única agrupada para modelos de terceiros."),
+            ("✦ Cota Argon", "Modelos: Argon Advanced Reasoning, Google DeepMind Frontier\nExclusivo para assinantes de planos Pro pagos.")
+        ]
+        for title, desc in rows_expl:
+            r = tk.Frame(card_info, bg="#1e293b")
+            r.pack(fill="x", padx=10, pady=4)
+            tk.Label(r, text=title, font=("Segoe UI", 8, "bold"), fg="#f8fafc", bg="#1e293b", width=18, anchor="w").pack(side="left", anchor="n")
+            tk.Label(r, text=desc, font=("Segoe UI", 8), fg="#94a3b8", bg="#1e293b", justify="left", anchor="w").pack(side="left")
 
         # Refresh slider
         tk.Label(f, text="⏱ Ciclo de Atualização Automática:", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(4, 2))
@@ -666,7 +751,7 @@ class SettingsDialog(tk.Toplevel):
         scale_ref.pack(fill="x", side="left", expand=True)
 
         # Alert Threshold
-        tk.Label(f, text="🚨 Alerta de Cota Crítica:", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(16, 2))
+        tk.Label(f, text="🚨 Alerta de Cota Crítica:", font=("Segoe UI", 9, "bold"), fg="#38bdf8", bg="#0f172a").pack(anchor="w", pady=(12, 2))
         f_alert = tk.Frame(f, bg="#0f172a")
         f_alert.pack(fill="x")
 
@@ -677,8 +762,6 @@ class SettingsDialog(tk.Toplevel):
         scale_thresh = tk.Scale(f_alert, from_=50, to=95, orient="horizontal", variable=self.thresh_var, bg="#1e293b", fg="#f8fafc",
                                 highlightthickness=0, bd=0, activebackground="#ef4444", command=lambda v: self.thresh_lbl.config(text=f"{v}%"))
         scale_thresh.pack(fill="x", side="left", expand=True)
-
-        tk.Label(f, text="Cartões com consumo acima deste percentual serão destacados em vermelho.", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(2, 10))
 
         # Bar options
         self.show_free_var = tk.BooleanVar(value=self.config_copy.get("show_free_pct", True))
@@ -691,10 +774,13 @@ class SettingsDialog(tk.Toplevel):
                        variable=self.show_count_var, font=("Segoe UI", 9), fg="#e2e8f0", bg="#0f172a",
                        selectcolor="#1e293b", activebackground="#0f172a", activeforeground="#e2e8f0").pack(anchor="w", pady=3)
 
+        sf.bind_mousewheel(f)
+
     # ---------------- TAB: SISTEMA & WINDOWS ----------------
     def build_tab_system(self):
-        f = tk.Frame(self.content_container, bg="#0f172a")
-        self.tab_frames["system"] = f
+        sf = ScrollableFrame(self.content_container, bg="#0f172a")
+        self.tab_frames["system"] = sf
+        f = sf.scrollable_window
 
         tk.Label(f, text="Integração com o Windows & Sistema", font=("Segoe UI", 12, "bold"), fg="#f8fafc", bg="#0f172a").pack(anchor="w", pady=(0, 4))
         tk.Label(f, text="Configure inicialização automática, comportamento de janelas e manutenção.", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(0, 14))
@@ -726,6 +812,8 @@ class SettingsDialog(tk.Toplevel):
         tk.Button(f_maint, text="📁 Abrir .antigravity-custom", font=("Segoe UI", 8), fg="#cbd5e1", bg="#334155", bd=0, padx=10, pady=5, cursor="hand2", command=lambda: open_folder(CUSTOM_DIR)).pack(side="left", padx=6)
         tk.Button(f_maint, text="🔄 Restaurar Padrões", font=("Segoe UI", 8), fg="#ef4444", bg="#450a0a", bd=0, padx=10, pady=5, cursor="hand2", command=self.restore_defaults).pack(side="left", padx=6)
 
+        sf.bind_mousewheel(f)
+
     def clear_cache(self):
         cache_file = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
         if os.path.exists(cache_file):
@@ -746,8 +834,9 @@ class SettingsDialog(tk.Toplevel):
 
     # ---------------- TAB: SOBRE & DIAGNÓSTICO ----------------
     def build_tab_about(self):
-        f = tk.Frame(self.content_container, bg="#0f172a")
-        self.tab_frames["about"] = f
+        sf = ScrollableFrame(self.content_container, bg="#0f172a")
+        self.tab_frames["about"] = sf
+        f = sf.scrollable_window
 
         tk.Label(f, text="Antigravity Quota Manager & Toolbar", font=("Segoe UI", 12, "bold"), fg="#f8fafc", bg="#0f172a").pack(anchor="w", pady=(0, 4))
         tk.Label(f, text="Versão 2.5.0 Pro — Monitoramento e Gestão Multi-Perfil para Google Antigravity", font=("Segoe UI", 8), fg="#64748b", bg="#0f172a").pack(anchor="w", pady=(0, 16))
@@ -761,7 +850,8 @@ class SettingsDialog(tk.Toplevel):
             ("Instância Única (Porta IPC):", f"127.0.0.1:{SINGLE_INSTANCE_PORT}"),
             ("Diretório de Configurações:", CUSTOM_DIR),
             ("Repositório de Código:", r"C:\55\3\agy-cli-toolbar"),
-            ("Comandos CLI Suportados:", "agy (Perfil 1), agy2 (Perfil 2), agy3 (Perfil 3), agy4 (Perfil 4)...")
+            ("Comandos CLI Suportados:", "agy (Perfil 1), agy2 (Perfil 2), agy3 (Perfil 3), agy4 (Perfil 4)..."),
+            ("Cotas Suportadas:", "Gemini (5h/7d), Outros (GPT/Claude), Argon (Pro)")
         ]
 
         for label, val in info_rows:
@@ -773,6 +863,8 @@ class SettingsDialog(tk.Toplevel):
         f_log = tk.Frame(f, bg="#0f172a")
         f_log.pack(fill="x", pady=12)
         tk.Button(f_log, text="📄 Abrir Arquivo de Logs (tray.log)", font=("Segoe UI", 8), fg="#38bdf8", bg="#1e293b", bd=0, padx=12, pady=5, cursor="hand2", command=self.open_log_file).pack(side="left")
+
+        sf.bind_mousewheel(f)
 
     def open_log_file(self):
         log_file = os.path.join(CUSTOM_DIR, "tray.log")
@@ -795,8 +887,9 @@ class SettingsDialog(tk.Toplevel):
             self.config_copy["columns"] = cols
 
             # Calculate optimal window dimensions incorporating zoom scale
+            card_h = 245 if self.default_expanded_var.get() else 195
             opt_w = min(max(int(round(cols * 330 * new_scale + 20)), 360), 2000)
-            opt_h = min(max(int(round(rows * 195 * new_scale + 80)), 200), 1400)
+            opt_h = min(max(int(round(rows * card_h * new_scale + 80)), 200), 1400)
             self.parent.geometry(f"{opt_w}x{opt_h}")
             self.config_copy["width"] = opt_w
             self.config_copy["height"] = opt_h
@@ -812,6 +905,7 @@ class SettingsDialog(tk.Toplevel):
         self.config_copy["refresh_seconds"] = self.ref_var.get()
         self.config_copy["opacity"] = self.op_var.get() / 100.0
         self.config_copy["privacy_mode"] = self.priv_var.get()
+        self.config_copy["default_expanded"] = self.default_expanded_var.get()
         self.config_copy["card_density"] = self.density_var.get()
         self.config_copy["alert_threshold"] = self.thresh_var.get()
         self.config_copy["show_free_pct"] = self.show_free_var.get()
@@ -838,6 +932,8 @@ class DesktopWidget(tk.Tk):
         self.cols = self.config_data.get("columns", 2)
         self.card_views = {}
         self.known_profiles_signature = ""
+        self.expanded_cards = {}
+        self.all_expanded = self.config_data.get("default_expanded", False)
 
         self.title("Antigravity Quotas")
         self.overrideredirect(True)
@@ -935,6 +1031,8 @@ class DesktopWidget(tk.Tk):
         if hasattr(self, "zoom_lbl"):
             cur_pct = int(round(float(self.config_data.get("ui_scale", 1.20)) * 100))
             self.zoom_lbl.config(text=f"{cur_pct}%", font=self.get_font(8, "bold"))
+        if hasattr(self, "btn_details"):
+            self.btn_details.config(text="▲ Resumo" if self.all_expanded else "▼ Detalhes", font=self.get_font(8, "bold"), fg=self.theme_colors["accent"])
         if hasattr(self, "btn_settings"):
             self.btn_settings.config(font=self.get_font(8, "bold"))
 
@@ -1063,6 +1161,13 @@ class DesktopWidget(tk.Tk):
         btn_zoom_in.pack(side="left", padx=1)
         btn_zoom_in.bind("<Button-1>", lambda e: self.adjust_zoom(0.10))
 
+        self.btn_details = tk.Label(self.header, text="▲ Resumo" if self.all_expanded else "▼ Detalhes",
+                                    font=self.get_font(8, "bold"), fg=self.theme_colors["accent"],
+                                    bg=self.theme_colors["header_bg"], cursor="hand2")
+        self.btn_details.pack(side="right", padx=4)
+        self.btn_details.bind("<Button-1>", lambda e: self.toggle_all_cards_detail())
+        ToolTip(self.btn_details, "Alternar entre modo resumido e detalhado em todos os perfis")
+
         self.btn_settings = tk.Label(self.header, text="⚙️ Ajustes", font=self.get_font(8, "bold"), fg="#38bdf8",
                                      bg=self.theme_colors["header_bg"], cursor="hand2")
         self.btn_settings.pack(side="right", padx=4)
@@ -1150,8 +1255,9 @@ class DesktopWidget(tk.Tk):
         self.config_data["columns"] = cols
 
         scale = float(self.config_data.get("ui_scale", 1.20))
+        card_h = 245 if getattr(self, "all_expanded", False) else 195
         opt_w = min(max(int(round(cols * 330 * scale + 20)), 360), 2000)
-        opt_h = min(max(int(round(rows * 195 * scale + 80)), 200), 1400)
+        opt_h = min(max(int(round(rows * card_h * scale + 80)), 200), 1400)
         self.geometry(f"{opt_w}x{opt_h}")
         self.config_data["width"] = opt_w
         self.config_data["height"] = opt_h
@@ -1252,6 +1358,19 @@ class DesktopWidget(tk.Tk):
         d["cv"].coords(d["right_id"], w - 8, h // 2)
         d["cv"].itemconfig(d["right_id"], text=right_text, font=bar_font)
 
+    def toggle_card_detail(self, profile_key):
+        is_exp = self.expanded_cards.get(profile_key, self.all_expanded)
+        self.expanded_cards[profile_key] = not is_exp
+        self.refresh_profiles()
+
+    def toggle_all_cards_detail(self):
+        self.all_expanded = not self.all_expanded
+        for k in self.card_views.keys():
+            self.expanded_cards[k] = self.all_expanded
+        if hasattr(self, "btn_details"):
+            self.btn_details.config(text="▲ Resumo" if self.all_expanded else "▼ Detalhes")
+        self.refresh_profiles()
+
     def build_profile_card(self, parent, key, prof, row, col):
         is_active = (key == pm.get_active_profile())
         th = self.theme_colors
@@ -1262,7 +1381,7 @@ class DesktopWidget(tk.Tk):
         card.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
         parent.grid_columnconfigure(col, weight=1)
 
-        # Row 1: Header Row (Dot + Name + Command + ATIVO Tag + Status + Arrows)
+        # Row 1: Header Row (Dot + Name + Command + ATIVO Tag + Status + Detalhes + Arrows)
         row_top = tk.Frame(card, bg=card_bg)
         row_top.pack(fill="x", padx=8, pady=(4, 1))
 
@@ -1288,6 +1407,13 @@ class DesktopWidget(tk.Tk):
         status_lbl = tk.Label(top_right, text="", font=self.get_font(8, "bold"), fg="#22c55e", bg=card_bg)
         status_lbl.pack(side="left", padx=(0, 4))
 
+        is_expanded = self.expanded_cards.get(key, self.all_expanded)
+        btn_detail = tk.Label(top_right, text="▲ Resumo" if is_expanded else "▼ Detalhes",
+                              font=self.get_font(7, "bold"), fg="#38bdf8", bg=card_bg, cursor="hand2")
+        btn_detail.pack(side="left", padx=(0, 4))
+        btn_detail.bind("<Button-1>", lambda e, p=key: self.toggle_card_detail(p))
+        ToolTip(btn_detail, "Clique para expandir ou recolher os modelos desta cota")
+
         btn_left = tk.Label(top_right, text="◀", font=self.get_font(9), fg="#64748b", bg=card_bg, cursor="hand2")
         btn_left.pack(side="left", padx=1)
         btn_left.bind("<Button-1>", lambda e, p=key: self.shift_profile_order(p, -1))
@@ -1296,51 +1422,70 @@ class DesktopWidget(tk.Tk):
         btn_right.pack(side="left", padx=1)
         btn_right.bind("<Button-1>", lambda e, p=key: self.shift_profile_order(p, 1))
 
-        # Row 2: Email & Model Badges Row
+        # Row 2: Email & Badges Row
         row_meta = tk.Frame(card, bg=card_bg)
-        row_meta.pack(fill="x", padx=8, pady=(0, 3))
+        row_meta.pack(fill="x", padx=8, pady=(0, 2))
 
         email_lbl = tk.Label(row_meta, text="Carregando...", font=self.get_font(8), fg=th["text_muted"], bg=card_bg)
         email_lbl.pack(side="left")
 
-        models_box = tk.Frame(row_meta, bg=card_bg)
-        models_box.pack(side="right")
+        badges_box = tk.Frame(row_meta, bg=card_bg)
+        badges_box.pack(side="right")
 
-        # Row 3: Bars Container (In-bar bargraphs for every model in plan + rolling limits)
+        # Row 3: Bars Container (In-bar bargraphs for Gemini 5h, Gemini 7d, Outros 3P, and Argon if Pro)
         bars_container = tk.Frame(card, bg=card_bg)
         bars_container.pack(fill="x", padx=8, pady=(2, 2))
 
-        profile_models = self.config_data.get("profile_models", {})
-        models = profile_models.get(key) or []
-        if not models:
-            if key == "perfil4":
-                models = ["Argon", "GPT-4o", "Gemini 2.5 Pro"]
-            elif key == "perfil1":
-                models = ["Gemini 2.5 Pro", "GPT-4o"]
-            elif key == "perfil2":
-                models = ["Gemini 2.5 Pro"]
-            else:
-                models = ["Gemini 2.5 Pro", "GPT-4o"]
+        # 1. Gemini (5h) in-bar
+        gem5_row = tk.Frame(bars_container, bg=card_bg)
+        gem5_row.pack(fill="x", pady=1)
+        gem5_bar = self.create_compact_bargraph(gem5_row)
+        gem5_bar["cv"].pack(fill="x", expand=True)
+        ToolTip(gem5_bar["cv"], "★ COTA GEMINI (Compartilhada):\n• Gemini 2.5 Pro\n• Gemini 2.5 Flash\n• Gemini 3.8 Flash\n• Gemini 2.5 Thinking\nJanela móvel de 5 horas.")
 
-        model_bars = {}
-        for m in models:
-            m_row = tk.Frame(bars_container, bg=card_bg)
-            m_row.pack(fill="x", pady=1)
-            b = self.create_compact_bargraph(m_row)
-            b["cv"].pack(fill="x", expand=True)
-            model_bars[m] = b
+        # 2. Gemini (7d) in-bar
+        gemw_row = tk.Frame(bars_container, bg=card_bg)
+        gemw_row.pack(fill="x", pady=1)
+        gemw_bar = self.create_compact_bargraph(gemw_row)
+        gemw_bar["cv"].pack(fill="x", expand=True)
+        ToolTip(gemw_bar["cv"], "📅 COTA GEMINI SEMANAL (7 Dias):\n• Gemini 2.5 Pro / Flash / Thinking\nLimite semanal global compartilhado.")
 
-        # Flash 5h Compact In-Bar Bargraph
-        q5_row = tk.Frame(bars_container, bg=card_bg)
-        q5_row.pack(fill="x", pady=1)
-        q5_bar = self.create_compact_bargraph(q5_row)
-        q5_bar["cv"].pack(fill="x", expand=True)
+        # 3. Outros (GPT/Claude) in-bar
+        outros_row = tk.Frame(bars_container, bg=card_bg)
+        outros_row.pack(fill="x", pady=1)
+        outros_bar = self.create_compact_bargraph(outros_row)
+        outros_bar["cv"].pack(fill="x", expand=True)
+        ToolTip(outros_bar["cv"], "⚡ COTA OUTROS (GPT / Claude):\n• GPT-4o\n• GPT-4o-mini\n• Claude 3.5 Sonnet\n• Claude 3.7 Sonnet\n• o3-mini\nCota unificada de modelos 3P.")
 
-        # Weekly 7d Compact In-Bar Bargraph
-        qw_row = tk.Frame(bars_container, bg=card_bg)
-        qw_row.pack(fill="x", pady=1)
-        qw_bar = self.create_compact_bargraph(qw_row)
-        qw_bar["cv"].pack(fill="x", expand=True)
+        # 4. Argon (Pro) in-bar - Frame created, will be packed only if is_pro in update_card_in_place
+        argon_row = tk.Frame(bars_container, bg=card_bg)
+        argon_bar = self.create_compact_bargraph(argon_row)
+        argon_bar["cv"].pack(fill="x", expand=True)
+        ToolTip(argon_bar["cv"], "✦ COTA ARGON (Plano Pro Pago):\n• Argon Advanced Reasoning\n• Google DeepMind Frontier\nExclusivo da conta Pro ativa.")
+
+        # Row 4: Expandable Drawer (Lista explicativa detalhada de modelos por cota)
+        drawer = tk.Frame(card, bg=self.theme_colors.get("header_bg", "#0f172a"), bd=1, relief="solid",
+                          highlightbackground=border_col, highlightthickness=1)
+        
+        # Seção Gemini no Drawer
+        f_gem_det = tk.Frame(drawer, bg=drawer["bg"])
+        f_gem_det.pack(fill="x", padx=6, pady=2)
+        tk.Label(f_gem_det, text="★ Gemini:", font=self.get_font(7, "bold"), fg="#38bdf8", bg=drawer["bg"]).pack(side="left")
+        tk.Label(f_gem_det, text="2.5 Pro • 2.5 Flash • 3.8 Flash • Thinking", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
+
+        # Seção Outros no Drawer
+        f_out_det = tk.Frame(drawer, bg=drawer["bg"])
+        f_out_det.pack(fill="x", padx=6, pady=2)
+        tk.Label(f_out_det, text="⚡ Outros:", font=self.get_font(7, "bold"), fg="#34d399", bg=drawer["bg"]).pack(side="left")
+        tk.Label(f_out_det, text="GPT-4o • GPT-4o-mini • Claude 3.5/3.7 • o3-mini", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
+
+        # Seção Argon no Drawer (Frame created, packed conditionally if is_pro)
+        f_arg_det = tk.Frame(drawer, bg=drawer["bg"])
+        tk.Label(f_arg_det, text="✦ Argon (Pro):", font=self.get_font(7, "bold"), fg="#c084fc", bg=drawer["bg"]).pack(side="left")
+        tk.Label(f_arg_det, text="Argon Reasoning • DeepMind Frontier", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
+
+        if is_expanded:
+            drawer.pack(fill="x", padx=8, pady=(2, 4))
 
         # Row 5: Action Buttons Row (Ultra-compact)
         btn_box = tk.Frame(card, bg=card_bg)
@@ -1371,10 +1516,15 @@ class DesktopWidget(tk.Tk):
             "tag_lbl": tag_lbl,
             "email_lbl": email_lbl,
             "status_lbl": status_lbl,
-            "models_box": models_box,
-            "model_bars": model_bars,
-            "q5_bar": q5_bar,
-            "qw_bar": qw_bar,
+            "btn_detail": btn_detail,
+            "badges_box": badges_box,
+            "gem5_bar": gem5_bar,
+            "gemw_bar": gemw_bar,
+            "outros_bar": outros_bar,
+            "argon_row": argon_row,
+            "argon_bar": argon_bar,
+            "drawer": drawer,
+            "f_arg_det": f_arg_det,
             "btn_activate": btn_activate
         }
 
@@ -1401,11 +1551,17 @@ class DesktopWidget(tk.Tk):
 
         # Alert highlight if critical
         thresh = self.config_data.get("alert_threshold", 85)
-        q5 = info.get("quota_5h") or {}
-        qw = info.get("quota_weekly") or {}
-        used_5h = float(q5.get("used_pct", 0.0))
-        used_w = float(qw.get("used_pct", 0.0))
-        if max(used_5h, used_w) >= thresh:
+        g5 = info.get("gemini_5h") or info.get("quota_5h") or {}
+        gw = info.get("gemini_7d") or info.get("quota_weekly") or {}
+        ot = info.get("outros_3p") or {}
+        ar = info.get("argon") or {}
+
+        used_5h = float(g5.get("used_pct", 0.0))
+        used_w = float(gw.get("used_pct", 0.0))
+        used_ot = float(ot.get("used_pct", 0.0))
+        used_ar = float(ar.get("used_pct", 0.0)) if info.get("is_pro") else 0.0
+
+        if max(used_5h, used_w, used_ot, used_ar) >= thresh:
             border_col = "#ef4444"
 
         view["card"].config(bg=card_bg, highlightbackground=border_col)
@@ -1424,99 +1580,73 @@ class DesktopWidget(tk.Tk):
         status_col = "#22c55e" if info.get("has_oauth") else "#eab308"
         view["status_lbl"].config(text=status_text, fg=status_col, bg=card_bg, font=self.get_font(8, "bold"))
 
-        # Update Model Badges (Argon, GPT, Gemini, Claude, etc.)
-        for w in view["models_box"].winfo_children():
+        # Update Detail Button state
+        is_expanded = self.expanded_cards.get(key, self.all_expanded)
+        view["btn_detail"].config(text="▲ Resumo" if is_expanded else "▼ Detalhes", bg=card_bg, font=self.get_font(7, "bold"))
+
+        # Update Badges (Pro / Standard)
+        for w in view["badges_box"].winfo_children():
             w.destroy()
 
-        profile_models = self.config_data.get("profile_models", {})
-        models = profile_models.get(key) or info.get("models") or []
-        if not models:
-            if key == "perfil4":
-                models = ["Argon", "GPT-4o", "Gemini 2.5 Pro"]
-            elif key == "perfil1":
-                models = ["Gemini 2.5 Pro", "GPT-4o"]
-            elif key == "perfil2":
-                models = ["Gemini 2.5 Pro"]
-            else:
-                models = ["Gemini 2.5 Pro", "GPT-4o"]
-
-        for m in models:
-            m_lower = m.lower()
-            if "argon" in m_lower:
-                m_bg, m_fg, m_border, m_icon = "#3b0764", "#e9d5ff", "#9333ea", "✦ "
-            elif "gpt" in m_lower or "openai" in m_lower:
-                m_bg, m_fg, m_border, m_icon = "#064e3b", "#a7f3d0", "#059669", "⚡ "
-            elif "claude" in m_lower:
-                m_bg, m_fg, m_border, m_icon = "#451a03", "#fed7aa", "#d97706", "✻ "
-            else:
-                m_bg, m_fg, m_border, m_icon = "#172554", "#bfdbfe", "#2563eb", "★ "
-
-            pill = tk.Label(view["models_box"], text=f"{m_icon}{m}", font=self.get_font(7, "bold"),
-                            fg=m_fg, bg=m_bg, bd=1, relief="solid", highlightbackground=m_border, highlightthickness=1,
+        is_pro = info.get("is_pro", False)
+        if is_pro:
+            pill = tk.Label(view["badges_box"], text="✦ PRO / ARGON", font=self.get_font(7, "bold"),
+                            fg="#e9d5ff", bg="#581c87", bd=1, relief="solid", highlightbackground="#9333ea", highlightthickness=1,
                             padx=4, pady=1)
             pill.pack(side="left", padx=(0, 2))
+        else:
+            pill = tk.Label(view["badges_box"], text="PADRÃO", font=self.get_font(7, "bold"),
+                            fg="#94a3b8", bg="#1e293b", padx=4, pady=1)
+            pill.pack(side="left", padx=(0, 2))
 
-        # Model-Specific In-Bar Bargraphs
-        def get_model_style(model_name):
-            ml = model_name.lower()
-            if "argon" in ml:
-                return "#9333ea", "#2d0a4e", "✦ "
-            elif "gpt" in ml or "openai" in ml:
-                return "#10b981", "#063726", "⚡ "
-            elif "claude" in ml:
-                return "#d97706", "#3f1d0b", "✻ "
-            else:
-                return "#3b82f6", "#0f2942", "★ "
-
-        model_quotas = info.get("model_quotas", {})
-        for m, m_bar in view.get("model_bars", {}).items():
-            mq = model_quotas.get(m)
-            fill_col, track_col, m_ico = get_model_style(m)
-            if mq:
-                used_m = float(mq.get("used_pct", 0.0))
-                rem_m = max(100.0 - used_m, 0.0)
-                rst_m = pm.format_countdown(mq.get("reset_in_seconds", 0))
-            else:
-                used_m = 0.0
-                rem_m = 100.0
-                rst_m = "pronto"
-
-            left_m = f"{m_ico}{m}  {used_m:4.1f}%"
+        # Helper to format in-bar text
+        def format_bar_texts(label, used_val, rst_val, icon):
+            rem_val = max(100.0 - used_val, 0.0)
+            rst_str = pm.format_countdown(rst_val) if isinstance(rst_val, (int, float)) else str(rst_val)
+            left_t = f"{icon}{label}  {used_val:4.1f}%"
             if self.config_data.get("show_free_pct", True):
-                right_m = f"{rem_m:4.1f}% livre"
-                if self.config_data.get("show_countdown", True) and rst_m != "pronto":
-                    right_m += f" • {rst_m}"
+                right_t = f"{rem_val:4.1f}% livre"
+                if self.config_data.get("show_countdown", True) and rst_str not in ("pronto", "0m", "0s"):
+                    right_t += f" • {rst_str}"
             else:
-                right_m = f"reset {rst_m}" if (self.config_data.get("show_countdown", True) and rst_m != "pronto") else ""
+                right_t = f"reset {rst_str}" if (self.config_data.get("show_countdown", True) and rst_str not in ("pronto", "0m", "0s")) else ""
+            return left_t, right_t
 
-            self.update_compact_bargraph(m_bar, used_m, left_m, right_m, theme_color=fill_col, track_color=track_col)
+        # 1. Update Gemini 5h In-Bar
+        l_5h, r_5h = format_bar_texts("Gemini (5h)", used_5h, g5.get("reset_in_seconds", 0), "★ ")
+        self.update_compact_bargraph(view["gem5_bar"], used_5h, l_5h, r_5h, theme_color="#38bdf8", track_color="#082f49")
 
-        # 5h Quota in-bar update (Gemini Flash)
-        rem_5h = max(100.0 - used_5h, 0.0)
-        rst_5h = pm.format_countdown(q5.get("reset_in_seconds", 0))
-        left_5h = f"⏳ Flash 5h  {used_5h:4.1f}%"
-        if self.config_data.get("show_free_pct", True):
-            right_5h = f"{rem_5h:4.1f}% livre"
-            if self.config_data.get("show_countdown", True) and rst_5h != "pronto":
-                right_5h += f" • {rst_5h}"
+        # 2. Update Gemini 7d Semanal In-Bar
+        l_w, r_w = format_bar_texts("Gemini (7d)", used_w, gw.get("reset_in_seconds", 0), "📅 ")
+        self.update_compact_bargraph(view["gemw_bar"], used_w, l_w, r_w, theme_color="#0284c7", track_color="#0c4a6e")
+
+        # 3. Update Outros (GPT/Claude) In-Bar
+        l_ot, r_ot = format_bar_texts("Outros (GPT/Claude)", used_ot, ot.get("reset_in_seconds", 0), "⚡ ")
+        self.update_compact_bargraph(view["outros_bar"], used_ot, l_ot, r_ot, theme_color="#10b981", track_color="#064e3b")
+
+        # 4. Update Argon In-Bar (Packed only if is_pro)
+        if is_pro:
+            if not view["argon_row"].winfo_ismapped():
+                view["argon_row"].pack(fill="x", pady=1)
+            l_ar, r_ar = format_bar_texts("Argon (Pro)", used_ar, ar.get("reset_in_seconds", 0), "✦ ")
+            self.update_compact_bargraph(view["argon_bar"], used_ar, l_ar, r_ar, theme_color="#c084fc", track_color="#3b0764")
+            if not view["f_arg_det"].winfo_ismapped():
+                view["f_arg_det"].pack(fill="x", padx=6, pady=2)
         else:
-            right_5h = f"reset {rst_5h}" if self.config_data.get("show_countdown", True) else ""
+            if view["argon_row"].winfo_ismapped():
+                view["argon_row"].pack_forget()
+            if view["f_arg_det"].winfo_ismapped():
+                view["f_arg_det"].pack_forget()
 
-        self.update_compact_bargraph(view["q5_bar"], used_5h, left_5h, right_5h, theme_color="#22c55e")
-
-        # 7d Quota in-bar update (Semanal)
-        rem_w = max(100.0 - used_w, 0.0)
-        rst_w = pm.format_countdown(qw.get("reset_in_seconds", 0))
-        left_w = f"📅 Semanal 7d  {used_w:4.1f}%"
-        if self.config_data.get("show_free_pct", True):
-            right_w = f"{rem_w:4.1f}% livre"
-            if self.config_data.get("show_countdown", True) and rst_w != "pronto":
-                right_w += f" • {rst_w}"
+        # Update Drawer Visibility
+        if is_expanded:
+            if not view["drawer"].winfo_ismapped():
+                view["drawer"].pack(fill="x", padx=8, pady=(2, 4))
         else:
-            right_w = f"reset {rst_w}" if self.config_data.get("show_countdown", True) else ""
+            if view["drawer"].winfo_ismapped():
+                view["drawer"].pack_forget()
 
-        self.update_compact_bargraph(view["qw_bar"], used_w, left_w, right_w, theme_color="#0284c7")
-
+        # Update Active tag & button
         if is_active:
             view["tag_lbl"].pack(side="left", padx=4)
             view["btn_activate"].pack_forget()

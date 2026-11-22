@@ -387,8 +387,8 @@ def get_active_profile_name(email=None):
             return base
     return "perfil1"
 
-def save_profile_quota(profile_name, email, quota_5h, quota_weekly, model_quotas=None):
-    if not quota_5h and not quota_weekly and not model_quotas:
+def save_profile_quota(profile_name, email, quota_5h, quota_weekly, quota_outros=None, quota_argon=None, model_quotas=None):
+    if not quota_5h and not quota_weekly and not quota_outros and not quota_argon and not model_quotas:
         return
     cache_file = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
     quotas = {}
@@ -403,19 +403,43 @@ def save_profile_quota(profile_name, email, quota_5h, quota_weekly, model_quotas
         entry["email"] = email
     entry["updated_at"] = datetime.datetime.now().isoformat()
     if quota_5h:
-        entry["quota_5h"] = {
+        data_5h = {
             "used_pct": quota_5h[0],
             "rem_pct": quota_5h[1],
             "reset_in_seconds": quota_5h[2],
             "reset_time": quota_5h[3]
         }
+        entry["quota_5h"] = data_5h
+        entry["gemini_5h"] = data_5h
     if quota_weekly:
-        entry["quota_weekly"] = {
+        data_w = {
             "used_pct": quota_weekly[0],
             "rem_pct": quota_weekly[1],
             "reset_in_seconds": quota_weekly[2],
             "reset_time": quota_weekly[3]
         }
+        entry["quota_weekly"] = data_w
+        entry["gemini_7d"] = data_w
+    if quota_outros:
+        entry["outros_3p"] = {
+            "used_pct": quota_outros[0],
+            "rem_pct": quota_outros[1],
+            "reset_in_seconds": quota_outros[2],
+            "reset_time": quota_outros[3]
+        }
+    if quota_argon:
+        entry["argon"] = {
+            "used_pct": quota_argon[0],
+            "rem_pct": quota_argon[1],
+            "reset_in_seconds": quota_argon[2],
+            "reset_time": quota_argon[3]
+        }
+        entry["is_pro"] = True
+    elif profile_name == "perfil4":
+        entry["is_pro"] = True
+    else:
+        entry["is_pro"] = entry.get("is_pro", False)
+
     if model_quotas:
         cur_mq = entry.get("model_quotas", {})
         cur_mq.update(model_quotas)
@@ -673,17 +697,9 @@ def main():
 
         # Active Profile & Quota Cache Sync
         active_prof = get_active_profile_name(email)
-        model_quotas_parsed = {}
         argon_q = parse_quota(quota, rate_limits, ["argon", "argon-5h", "gemini-argon"])
-        if argon_q:
-            model_quotas_parsed["Argon"] = {"used_pct": argon_q[0], "rem_pct": argon_q[1], "reset_in_seconds": argon_q[2]}
-        gpt_q = parse_quota(quota, rate_limits, ["gpt-4o", "3p-5h", "3p", "openai-gpt-4o"])
-        if gpt_q:
-            model_quotas_parsed["GPT-4o"] = {"used_pct": gpt_q[0], "rem_pct": gpt_q[1], "reset_in_seconds": gpt_q[2]}
-        pro_q = parse_quota(quota, rate_limits, ["pro", "gemini-pro", "gemini-2.5-pro", "pro-5h"])
-        if pro_q:
-            model_quotas_parsed["Gemini 2.5 Pro"] = {"used_pct": pro_q[0], "rem_pct": pro_q[1], "reset_in_seconds": pro_q[2]}
-        save_profile_quota(active_prof, email, quota_5h, quota_weekly, model_quotas_parsed)
+        outros_q = parse_quota(quota, rate_limits, ["3p-5h", "3p", "gpt-4o", "claude", "third_party", "outros"])
+        save_profile_quota(active_prof, email, quota_5h, quota_weekly, quota_outros=outros_q, quota_argon=argon_q)
 
         # Account / Email, Profile & Plan Tier
         if conf.get("show_email", True) and email and not is_narrow:

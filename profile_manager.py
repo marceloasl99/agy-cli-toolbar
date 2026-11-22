@@ -167,6 +167,11 @@ def discover_profiles():
                 }
     return profiles
 
+# Antigravity Model Groups & Quota Families
+GEMINI_MODELS = ["Gemini 2.5 Pro", "Gemini 2.5 Flash", "Gemini 3.8 Flash", "Gemini Thinking"]
+OUTROS_MODELS = ["GPT-4o", "GPT-4o-mini", "Claude 3.5 Sonnet", "Claude 3.7 Sonnet", "o3-mini"]
+ARGON_MODELS = ["Argon Advanced Reasoning", "Google DeepMind Frontier"]
+
 def get_profile_info(prof):
     gem_dir = prof["gemini_dir"]
     wincred_file = os.path.join(gem_dir, "wincred.json")
@@ -234,33 +239,25 @@ def get_profile_info(prof):
         except Exception:
             pass
 
-    # Read Models Configuration
-    models = []
-    widget_conf_file = os.path.join(CUSTOM_DIR, "widget_config.json")
-    if os.path.exists(widget_conf_file):
-        try:
-            with open(widget_conf_file, "r", encoding="utf-8") as f:
-                w_conf = json.load(f)
-                models = w_conf.get("profile_models", {}).get(prof["name"], [])
-        except Exception:
-            pass
-    if not models:
-        if prof["name"] == "perfil4":
-            models = ["Argon", "GPT-4o", "Gemini 2.5 Pro"]
-        elif prof["name"] == "perfil1":
-            models = ["Gemini 2.5 Pro", "GPT-4o"]
-        elif prof["name"] == "perfil2":
-            models = ["Gemini 2.5 Pro"]
-        else:
-            models = ["Gemini 2.5 Pro", "GPT-4o"]
+    gemini_5h = quotas.get("gemini_5h") or quotas.get("quota_5h")
+    gemini_7d = quotas.get("gemini_7d") or quotas.get("quota_weekly")
+    outros_3p = quotas.get("outros_3p") or quotas.get("model_quotas", {}).get("GPT-4o")
+    argon = quotas.get("argon") or quotas.get("model_quotas", {}).get("Argon")
+    is_pro = bool(quotas.get("is_pro") or prof["name"] == "perfil4" or argon)
 
     return {
         "email": email,
         "has_oauth": has_oauth,
-        "models": models,
-        "quota_5h": quotas.get("quota_5h"),
-        "quota_weekly": quotas.get("quota_weekly"),
-        "model_quotas": quotas.get("model_quotas", {}),
+        "is_pro": is_pro,
+        "gemini_5h": gemini_5h,
+        "gemini_7d": gemini_7d,
+        "outros_3p": outros_3p,
+        "argon": argon if is_pro else None,
+        "gemini_models": GEMINI_MODELS,
+        "outros_models": OUTROS_MODELS,
+        "argon_models": ARGON_MODELS if is_pro else [],
+        "quota_5h": gemini_5h,
+        "quota_weekly": gemini_7d,
         "quota_updated": quotas.get("updated_at")
     }
 
@@ -303,49 +300,59 @@ def cmd_list():
         status_tag = f"{GREEN}✓ Conectado{RESET}" if info["has_oauth"] else f"{YELLOW}! Requer Auth{RESET}"
         
         print(f" {active_tag} {BOLD}[{i}] {prof['display']}{RESET}  {GRAY}(id: {key}){RESET}")
-        print(f"     👤 Conta: {CYAN}{info['email']}{RESET}  │  Status: {status_tag}")
-        models_str = " ".join([f"{MAGENTA}[{m}]{RESET}" for m in info.get("models", [])])
-        if models_str:
-            print(f"     🤖 Modelos: {models_str}")
+        tier_badge = f"{BOLD}{MAGENTA}[PRO PLAN]{RESET}" if info["is_pro"] else f"{GRAY}[PADRÃO]{RESET}"
+        print(f"     👤 Conta: {CYAN}{info['email']}{RESET}  │  Status: {status_tag}  │  {tier_badge}")
         
-        # 5h Quota
-        q5h = info["quota_5h"]
+        # 1. COTA GEMINI (5h e 7d)
+        q5h = info["gemini_5h"]
         if q5h:
             used5 = q5h.get("used_pct", 0.0)
             bar5 = make_mini_bar(used5, length=14)
             rst5 = format_countdown(q5h.get("reset_in_seconds", 0))
             col5 = GREEN if used5 < 60 else (YELLOW if used5 < 85 else RED)
-            print(f"     ⏳ Cota 5h:  [{bar5}] {col5}{used5:4.1f}%{RESET} {GRAY}(reset em {rst5}){RESET}")
+            print(f"     ★ Gemini (5h)  : [{bar5}] {col5}{used5:4.1f}%{RESET} {GRAY}(reset em {rst5}){RESET}")
         else:
             bar_empty = make_mini_bar(0.0, length=14)
-            print(f"     ⏳ Cota 5h:  [{bar_empty}] {GRAY}0.0% (sem histórico){RESET}")
+            print(f"     ★ Gemini (5h)  : [{bar_empty}] {GRAY}0.0% (sem histórico){RESET}")
 
-        # Weekly Quota
-        qw = info["quota_weekly"]
+        qw = info["gemini_7d"]
         if qw:
             used_w = qw.get("used_pct", 0.0)
             bar_w = make_mini_bar(used_w, length=14)
             rst_w = format_countdown(qw.get("reset_in_seconds", 0))
             col_w = GREEN if used_w < 60 else (YELLOW if used_w < 85 else RED)
-            print(f"     📅 Cota 7d:  [{bar_w}] {col_w}{used_w:4.1f}%{RESET} {GRAY}(reset em {rst_w}){RESET}")
+            print(f"     📅 Gemini (7d)  : [{bar_w}] {col_w}{used_w:4.1f}%{RESET} {GRAY}(reset em {rst_w}){RESET}")
         else:
             bar_empty_w = make_mini_bar(0.0, length=14)
-            print(f"     📅 Cota 7d:  [{bar_empty_w}] {GRAY}0.0% (sem histórico){RESET}")
+            print(f"     📅 Gemini (7d)  : [{bar_empty_w}] {GRAY}0.0% (sem histórico){RESET}")
+        print(f"        {GRAY}↳ Modelos Gemini:{RESET} {CYAN}Gemini 2.5 Pro, 2.5 Flash, 3.8 Flash, Thinking{RESET}")
 
-        # Model-Specific Quotas (Argon, GPT-4o, Gemini 2.5 Pro, etc.)
-        model_q = info.get("model_quotas", {})
-        for m in info.get("models", []):
-            mq = model_q.get(m)
-            m_icon = "✦" if "argon" in m.lower() else ("⚡" if "gpt" in m.lower() else ("✻" if "claude" in m.lower() else "★"))
-            if mq:
-                u_pct = mq.get("used_pct", 0.0)
-                m_bar = make_mini_bar(u_pct, length=14)
-                m_rst = format_countdown(mq.get("reset_in_seconds", 0))
-                m_col = GREEN if u_pct < 60 else (YELLOW if u_pct < 85 else RED)
-                print(f"     {m_icon} {m:<9}: [{m_bar}] {m_col}{u_pct:4.1f}%{RESET} {GRAY}(reset em {m_rst}){RESET}")
+        # 2. COTA OUTROS (GPT / CLAUDE)
+        qo = info.get("outros_3p")
+        if qo:
+            used_o = qo.get("used_pct", 0.0)
+            bar_o = make_mini_bar(used_o, length=14)
+            rst_o = format_countdown(qo.get("reset_in_seconds", 0))
+            col_o = GREEN if used_o < 60 else (YELLOW if used_o < 85 else RED)
+            print(f"     ⚡ Outros (3P)  : [{bar_o}] {col_o}{used_o:4.1f}%{RESET} {GRAY}(reset em {rst_o}){RESET}")
+        else:
+            bar_empty_o = make_mini_bar(0.0, length=14)
+            print(f"     ⚡ Outros (3P)  : [{bar_empty_o}] {GREEN} 0.0%{RESET} {GRAY}(disponível){RESET}")
+        print(f"        {GRAY}↳ Modelos Outros:{RESET} {YELLOW}GPT-4o, GPT-4o-mini, Claude 3.5/3.7 Sonnet, o3-mini{RESET}")
+
+        # 3. COTA ARGON (SE CONTA PRO)
+        if info["is_pro"]:
+            qa = info.get("argon")
+            if qa:
+                used_a = qa.get("used_pct", 0.0)
+                bar_a = make_mini_bar(used_a, length=14)
+                rst_a = format_countdown(qa.get("reset_in_seconds", 0))
+                col_a = GREEN if used_a < 60 else (YELLOW if used_a < 85 else RED)
+                print(f"     ✦ Argon (Pro)  : [{bar_a}] {col_a}{used_a:4.1f}%{RESET} {GRAY}(reset em {rst_a}){RESET}")
             else:
-                m_bar_empty = make_mini_bar(0.0, length=14)
-                print(f"     {m_icon} {m:<9}: [{m_bar_empty}] {GREEN} 0.0%{RESET} {GRAY}(disponível){RESET}")
+                bar_empty_a = make_mini_bar(0.0, length=14)
+                print(f"     ✦ Argon (Pro)  : [{bar_empty_a}] {GREEN} 0.0%{RESET} {GRAY}(disponível){RESET}")
+            print(f"        {GRAY}↳ Modelos Argon :{RESET} {MAGENTA}Argon Advanced Reasoning, Frontier Pro{RESET}")
         
         print(f"     📁 Pasta: {GRAY}{prof['root']}{RESET}\n")
 
