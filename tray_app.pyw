@@ -967,8 +967,8 @@ class DesktopWidget(tk.Tk):
             # Win32 forceful foreground pop
             try:
                 import ctypes
-                hwnd = self.winfo_id()
                 user32 = ctypes.windll.user32
+                hwnd = user32.GetParent(self.winfo_id()) or self.winfo_id()
                 user32.ShowWindow(hwnd, 9)  # SW_RESTORE
                 user32.ShowWindow(hwnd, 5)  # SW_SHOW
                 fore_hwnd = user32.GetForegroundWindow()
@@ -1000,7 +1000,7 @@ class DesktopWidget(tk.Tk):
             GWL_EXSTYLE = -20
             WS_EX_APPWINDOW = 0x00040000
             WS_EX_TOOLWINDOW = 0x00000080
-            hwnd = self.winfo_id()
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id()) or self.winfo_id()
             style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
             style = (style | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
             ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
