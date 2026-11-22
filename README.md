@@ -100,6 +100,42 @@ Isolates individual Google accounts into dedicated sandboxes (`~/.agy-perfis/per
 
 ---
 
+### 📂 Trusted Working Directory (`agy-profile workdir`)
+
+Each profile can have one or more **trusted working directories** (project folders). When you launch `agy1`, `agy5`, etc., the CLI automatically `cd`s into your configured folder before starting — no manual navigation needed.
+
+```bash
+# Set the default folder for a profile (opens in this dir every time)
+agy-profile workdir set perfil1 C:\Projects\myapp
+
+# Add an extra folder without changing the default
+agy-profile workdir add perfil1 C:\Projects\other
+
+# List all configured folders
+agy-profile workdir list
+agy-profile workdir list perfil1
+
+# Interactive picker — choose which folder to open
+agy-profile workdir choose perfil1
+
+# Remove a configured folder
+agy-profile workdir remove perfil1 C:\Projects\other
+
+# Output path only (used internally by .cmd launchers)
+agy-profile workdir get perfil1
+```
+
+**How it works at launch:**
+
+```
+agy5  ──► pre-run hook ──► cd to configured folder ──► agy.exe ──► post-run hook
+```
+
+If no folder is configured, the CLI opens in the directory where you invoked the command (default behavior).
+Configured folders are stored in `~/.antigravity-custom/profile_workdirs.json`.
+
+---
+
 ## 2️⃣ Windows Experience: Floating Dashboard & System Tray (`tray_app.pyw`)
 
 A native, zero-console background application (`pythonw.exe`) combining a custom **Floating Desktop HUD** with a **Windows System Tray** controller (`pystray`).

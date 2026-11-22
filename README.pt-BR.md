@@ -100,6 +100,39 @@ Isola contas Google em diretórios independentes (`~/.agy-perfis/perfil1`, `perf
 
 ---
 
+### 📂 Pasta de Trabalho Padrão (`agy-profile workdir`)
+
+Cada perfil pode ter uma ou mais **pastas de trabalho confiáveis** (diretórios de projetos). Ao abrir `agy1`, `agy5` etc., o CLI entra automaticamente na pasta configurada — sem precisar navegar manualmente.
+
+```bash
+# Define a pasta padrão para um perfil (abre nela sempre que lançado)
+agy-profile workdir set perfil1 C:\Projetos\meuapp
+
+# Adiciona uma pasta extra sem mudar o padrão
+agy-profile workdir add perfil1 C:\Projetos\outro
+
+# Lista todas as pastas configuradas
+agy-profile workdir list
+agy-profile workdir list perfil1
+
+# Seletor interativo — escolha qual pasta abrir
+agy-profile workdir choose perfil1
+
+# Remove uma pasta configurada
+agy-profile workdir remove perfil1 C:\Projetos\outro
+```
+
+**Como funciona ao abrir o perfil:**
+
+```
+agy5  ──► hook pre-run ──► cd para pasta configurada ──► agy.exe ──► hook post-run
+```
+
+Se nenhuma pasta estiver configurada, o CLI abre no diretório atual (comportamento padrão).  
+As pastas ficam salvas em `~/.antigravity-custom/profile_workdirs.json`.
+
+---
+
 ## 2️⃣ Versão Windows: Dashboard Flutuante & Bandeja do Sistema (`tray_app.pyw`)
 
 Aplicativo nativo sem console (`pythonw.exe`) que une um **Dashboard HUD Flutuante** a um menu interativo na **Bandeja do Sistema** (`pystray`).
