@@ -5,6 +5,7 @@ import time
 import socket
 import threading
 import subprocess
+import traceback
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from PIL import Image, ImageDraw
@@ -14,6 +15,24 @@ CUSTOM_DIR = os.path.join(os.path.expanduser("~"), ".antigravity-custom")
 for d in [SCRIPT_DIR, CUSTOM_DIR]:
     if d not in sys.path:
         sys.path.insert(0, d)
+
+def _global_exception_handler(exctype, value, tb):
+    if issubclass(exctype, (KeyboardInterrupt, SystemExit)):
+        sys.__excepthook__(exctype, value, tb)
+        return
+    try:
+        os.makedirs(CUSTOM_DIR, exist_ok=True)
+        log_path = os.path.join(CUSTOM_DIR, "tray.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] EXCEÇÃO NÃO TRATADA:\n")
+            f.write("".join(traceback.format_exception(exctype, value, tb)))
+            f.write("\n")
+    except Exception:
+        pass
+
+sys.excepthook = _global_exception_handler
+if hasattr(threading, "excepthook"):
+    threading.excepthook = lambda args: _global_exception_handler(args.exc_type, args.exc_value, args.exc_traceback)
 
 try:
     import profile_manager as pm
@@ -25,6 +44,7 @@ from pystray import MenuItem as item, Menu
 
 CONFIG_FILE = os.path.join(CUSTOM_DIR, "widget_config.json")
 SINGLE_INSTANCE_PORT = 49285
+SINGLE_INSTANCE_MUTEX = "Local\\AntigravityQuotaMonitor_SingleInstanceMutex"
 
 GRID_PRESETS = {
     "1x1": (1, 1),
@@ -769,16 +789,16 @@ class DesktopWidget(tk.Tk):
         self.attributes("-alpha", self.config_data.get("opacity", 0.96))
 
         # Initial geometry
-        x = self.config_data.get("x", 100)
-        y = self.config_data.get("y", 100)
-        w = self.config_data.get("width", 740)
-        h = self.config_data.get("height", 480)
+        x = self.config_data.get("x", 120)
+        y = self.config_data.get("y", 80)
+        w = self.config_data.get("width", 680)
+        h = self.config_data.get("height", 370)
         # Ensure coordinates are within visible screen bounds
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
-        if x < 0 or x + 150 > screen_w:
+        if x < 20 or x + 150 > screen_w:
             x = max((screen_w - w) // 2, 50)
-        if y < 0 or y + 150 > screen_h:
+        if y < 20 or y + 150 > screen_h:
             y = max((screen_h - h) // 2, 50)
         self.geometry(f"{w}x{h}+{x}+{y}")
 
@@ -827,18 +847,57 @@ class DesktopWidget(tk.Tk):
         self.refresh_profiles(force=True)
 
     def bring_to_front(self):
-        """Wakes up the widget cleanly without creating duplicates."""
+        """Wakes up the widget cleanly without creating duplicates and forces it into foreground."""
         try:
             self.deiconify()
             self.overrideredirect(True)
-            self.lift()
             self.attributes("-topmost", True)
+            self.lift()
             self.focus_force()
             self.config_data["visible"] = True
             save_widget_config(self.config_data)
             self.refresh_profiles(force=True)
+
+            # Win32 forceful foreground pop
+            try:
+                import ctypes
+                hwnd = self.winfo_id()
+                user32 = ctypes.windll.user32
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                user32.ShowWindow(hwnd, 5)  # SW_SHOW
+                fore_hwnd = user32.GetForegroundWindow()
+                fore_tid = user32.GetWindowThreadProcessId(fore_hwnd, None)
+                cur_tid = ctypes.windll.kernel32.GetCurrentThreadId()
+                if fore_tid != cur_tid:
+                    user32.AttachThreadInput(fore_tid, cur_tid, True)
+                    user32.SetForegroundWindow(hwnd)
+                    user32.BringWindowToTop(hwnd)
+                    user32.AttachThreadInput(fore_tid, cur_tid, False)
+                else:
+                    user32.SetForegroundWindow(hwnd)
+                    user32.BringWindowToTop(hwnd)
+                user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+            except Exception:
+                pass
+
+            self._ensure_taskbar_presence()
+
+            # If user didn't pin always_on_top, keep it topmost for 4 seconds so they clearly see it pop up
             if not self.config_data.get("always_on_top", True):
-                self.after(800, lambda: self.attributes("-topmost", False))
+                self.after(4000, lambda: self.attributes("-topmost", False))
+        except Exception:
+            pass
+
+    def _ensure_taskbar_presence(self):
+        try:
+            import ctypes
+            GWL_EXSTYLE = -20
+            WS_EX_APPWINDOW = 0x00040000
+            WS_EX_TOOLWINDOW = 0x00000080
+            hwnd = self.winfo_id()
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            style = (style | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
+            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
         except Exception:
             pass
 
@@ -846,6 +905,8 @@ class DesktopWidget(tk.Tk):
         self.outer_frame = tk.Frame(self, bg=self.theme_colors["bg"], bd=1, relief="solid",
                                     highlightbackground=self.theme_colors["card_border"], highlightthickness=1)
         self.outer_frame.pack(fill="both", expand=True)
+
+        self.after(100, self._ensure_taskbar_presence)
 
         # Header Bar
         self.header = tk.Frame(self.outer_frame, bg=self.theme_colors["header_bg"], height=38)
@@ -1461,29 +1522,49 @@ class TrayApp:
 
 def enforce_single_instance_or_wake():
     """
-    Enforces that only one instance of the tray app runs.
-    If an instance is already running, sends SHOW signal and exits immediately.
+    Enforces that only one instance of the tray app runs using a Win32 Named Mutex
+    combined with an IPC TCP socket on localhost:49285.
+    If an instance is already running, wakes it up and exits immediately.
     """
+    mutex = None
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        mutex = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
+        last_err = kernel32.GetLastError()
+        if last_err == 183:  # ERROR_ALREADY_EXISTS: Another instance is running!
+            try:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.settimeout(2.5)
+                client.connect(("127.0.0.1", SINGLE_INSTANCE_PORT))
+                client.sendall(b"SHOW\n")
+                client.recv(1024)
+                client.close()
+            except Exception:
+                pass
+            sys.exit(0)
+    except Exception:
+        pass
+
+    # We are the master instance! Bind server socket
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         server_sock.bind(("127.0.0.1", SINGLE_INSTANCE_PORT))
         server_sock.listen(5)
-        return server_sock
-    except socket.error:
-        # Already running! Connect and wake it up
+    except Exception:
         try:
-            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client.settimeout(2.0)
-            client.connect(("127.0.0.1", SINGLE_INSTANCE_PORT))
-            client.sendall(b"SHOW\n")
-            client.close()
+            time.sleep(0.5)
+            server_sock.bind(("127.0.0.1", SINGLE_INSTANCE_PORT))
+            server_sock.listen(5)
         except Exception:
-            pass
-        sys.exit(0)
+            server_sock = None
+
+    return mutex, server_sock
 
 if __name__ == "__main__":
     try:
-        server_sock = enforce_single_instance_or_wake()
+        mutex, server_sock = enforce_single_instance_or_wake()
         app = TrayApp()
         app.run(server_sock)
     except Exception as e:
