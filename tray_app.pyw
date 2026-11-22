@@ -1232,7 +1232,7 @@ class DesktopWidget(tk.Tk):
         self.refresh_profiles(force=True)
 
     def bring_to_front(self):
-        """Wakes up the widget cleanly without creating duplicates and forces it into foreground."""
+        """Wakes up the widget cleanly and forces it into foreground."""
         try:
             self.deiconify()
             self.overrideredirect(True)
@@ -1243,46 +1243,9 @@ class DesktopWidget(tk.Tk):
             save_widget_config(self.config_data)
             self.refresh_profiles(force=True)
 
-            # Win32 forceful foreground pop
-            try:
-                import ctypes
-                user32 = ctypes.windll.user32
-                hwnd = user32.GetParent(self.winfo_id()) or self.winfo_id()
-                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-                user32.ShowWindow(hwnd, 5)  # SW_SHOW
-                fore_hwnd = user32.GetForegroundWindow()
-                fore_tid = user32.GetWindowThreadProcessId(fore_hwnd, None)
-                cur_tid = ctypes.windll.kernel32.GetCurrentThreadId()
-                if fore_tid != cur_tid:
-                    user32.AttachThreadInput(fore_tid, cur_tid, True)
-                    user32.SetForegroundWindow(hwnd)
-                    user32.BringWindowToTop(hwnd)
-                    user32.AttachThreadInput(fore_tid, cur_tid, False)
-                else:
-                    user32.SetForegroundWindow(hwnd)
-                    user32.BringWindowToTop(hwnd)
-                user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
-            except Exception:
-                pass
-
-            self._ensure_taskbar_presence()
-
             # If user didn't pin always_on_top, keep it topmost for 4 seconds so they clearly see it pop up
             if not self.config_data.get("always_on_top", True):
                 self.after(4000, lambda: self.attributes("-topmost", False))
-        except Exception:
-            pass
-
-    def _ensure_taskbar_presence(self):
-        try:
-            import ctypes
-            GWL_EXSTYLE = -20
-            WS_EX_APPWINDOW = 0x00040000
-            WS_EX_TOOLWINDOW = 0x00000080
-            hwnd = ctypes.windll.user32.GetParent(self.winfo_id()) or self.winfo_id()
-            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            style = (style | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
-            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
         except Exception:
             pass
 
@@ -1290,8 +1253,6 @@ class DesktopWidget(tk.Tk):
         self.outer_frame = tk.Frame(self, bg=self.theme_colors["bg"], bd=1, relief="solid",
                                     highlightbackground=self.theme_colors["card_border"], highlightthickness=1)
         self.outer_frame.pack(fill="both", expand=True)
-
-        self.after(100, self._ensure_taskbar_presence)
 
         # Header Bar
         self.header = tk.Frame(self.outer_frame, bg=self.theme_colors["header_bg"], height=38)
@@ -1466,10 +1427,15 @@ class DesktopWidget(tk.Tk):
 
     def show_widget(self):
         self.deiconify()
+        self.overrideredirect(True)
+        self.attributes("-topmost", True)
         self.lift()
+        self.focus_force()
         self.config_data["visible"] = True
         save_widget_config(self.config_data)
         self.refresh_profiles(force=True)
+        if not self.config_data.get("always_on_top", True):
+            self.after(3000, lambda: self.attributes("-topmost", False))
 
     def toggle_visibility(self):
         if self.winfo_viewable():
@@ -2271,7 +2237,8 @@ class TrayApp:
                                 "cards": list(self.widget.card_views.keys()),
                                 "preset": self.widget.config_data.get("grid_preset"),
                                 "cols": self.widget.cols,
-                                "ui_scale": self.widget.config_data.get("ui_scale")
+                                "ui_scale": self.widget.config_data.get("ui_scale"),
+                                "viewable": bool(self.widget.winfo_viewable())
                             }
                             conn.sendall((json.dumps(st) + "\n").encode("utf-8"))
                         elif "RESET4" in data:
