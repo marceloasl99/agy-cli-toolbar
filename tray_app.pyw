@@ -2282,20 +2282,35 @@ class TrayApp:
         if server_sock:
             def ipc_listener_thread():
                 while True:
+                    conn = None
                     try:
                         conn, _ = server_sock.accept()
+                        conn.settimeout(2.5)
                         data = conn.recv(1024).decode('utf-8', errors='ignore').strip()
                         if "STATUS" in data:
+                            try:
+                                w_val = self.widget.winfo_width()
+                                h_val = self.widget.winfo_height()
+                                sw_val = self.widget.winfo_screenwidth()
+                                sh_val = self.widget.winfo_screenheight()
+                                cards_val = list(self.widget.card_views.keys())
+                                viewable_val = bool(self.widget.winfo_viewable())
+                            except Exception:
+                                w_val = self.widget.config_data.get("width", 899)
+                                h_val = self.widget.config_data.get("height", 720)
+                                sw_val, sh_val = 1920, 1200
+                                cards_val = []
+                                viewable_val = True
                             st = {
-                                "width": self.widget.winfo_width(),
-                                "height": self.widget.winfo_height(),
-                                "screen_w": self.widget.winfo_screenwidth(),
-                                "screen_h": self.widget.winfo_screenheight(),
-                                "cards": list(self.widget.card_views.keys()),
+                                "width": w_val,
+                                "height": h_val,
+                                "screen_w": sw_val,
+                                "screen_h": sh_val,
+                                "cards": cards_val,
                                 "preset": self.widget.config_data.get("grid_preset"),
                                 "cols": self.widget.cols,
                                 "ui_scale": self.widget.config_data.get("ui_scale"),
-                                "viewable": bool(self.widget.winfo_viewable())
+                                "viewable": viewable_val
                             }
                             conn.sendall((json.dumps(st) + "\n").encode("utf-8"))
                         elif "RESET4" in data:
@@ -2315,9 +2330,14 @@ class TrayApp:
                             conn.sendall(b"OK\n")
                         else:
                             conn.sendall(b"OK\n")
-                        conn.close()
                     except Exception:
-                        break
+                        pass
+                    finally:
+                        if conn:
+                            try:
+                                conn.close()
+                            except Exception:
+                                pass
             t = threading.Thread(target=ipc_listener_thread, daemon=True)
             t.start()
 
