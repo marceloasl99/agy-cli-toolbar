@@ -1976,15 +1976,18 @@ class DesktopWidget(tk.Tk):
             )
 
         # 4. Update Argon In-Bar (Exibe no Pro, esconde completamente nos planos sem Argon)
-        if is_pro:
-            if not view["argon_row"].winfo_ismapped():
+        if is_pro and ar:
+            if view.get("argon_row") and not view["argon_row"].winfo_ismapped():
                 view["argon_row"].pack(fill="x", pady=1)
             l_ar, r_ar = format_bar_texts("Argon (Pro)", used_ar, ar.get("reset_in_seconds", 0), "✦ ")
-            self.update_compact_bargraph(view["argon_bar"], used_ar, l_ar, r_ar, theme_color="#c084fc", track_color="#3b0764")
-            if not view["f_arg_det"].winfo_ismapped():
+            if view.get("argon_bar"):
+                self.update_compact_bargraph(view["argon_bar"], used_ar, l_ar, r_ar, theme_color="#c084fc", track_color="#3b0764")
+            if view.get("f_arg_det") and not view["f_arg_det"].winfo_ismapped():
                 view["f_arg_det"].pack(fill="x", padx=6, pady=2)
-            view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#c084fc")
-            view["lbl_arg_models"].config(text="Gemini 4 Argon • Hydrogen • Neon", fg="#cbd5e1", font=self.get_font(7))
+            if view.get("lbl_arg_title"):
+                view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#c084fc")
+            if view.get("lbl_arg_models"):
+                view["lbl_arg_models"].config(text="Gemini 4 Argon • Hydrogen • Neon", fg="#cbd5e1", font=self.get_font(7))
             rsta = pm.format_countdown(ar.get("reset_in_seconds", 0))
             if hasattr(self, "argon_tooltips") and key in self.argon_tooltips:
                 self.argon_tooltips[key].text_func = (
@@ -1997,9 +2000,9 @@ class DesktopWidget(tk.Tk):
                 )
         else:
             # Esconde completamente a barra do Argon e os detalhes nos planos padrão sem Argon!
-            if view["argon_row"].winfo_ismapped():
+            if view.get("argon_row") and view["argon_row"].winfo_ismapped():
                 view["argon_row"].pack_forget()
-            if view["f_arg_det"].winfo_ismapped():
+            if view.get("f_arg_det") and view["f_arg_det"].winfo_ismapped():
                 view["f_arg_det"].pack_forget()
 
         # Update Drawer Visibility
