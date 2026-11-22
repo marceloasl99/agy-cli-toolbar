@@ -1,13 +1,20 @@
 import os
 
-bin_dir = r"C:\Users\ma038\AppData\Local\agy\bin"
+user_home = os.path.expanduser("~")
+bin_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.join(user_home, "AppData", "Local")), "agy", "bin")
+profiles_base = os.path.join(user_home, ".agy-perfis")
+
 files = {
-    "agy.cmd": ("perfil1", r"C:\Users\ma038"),
-    "agy1.cmd": ("perfil1", r"C:\Users\ma038"),
-    "agy2.cmd": ("perfil2", r"C:\Users\ma038\.agy-perfis\perfil2"),
-    "agy3.cmd": ("perfil3", r"C:\Users\ma038\.agy-perfis\perfil3"),
-    "agy4.cmd": ("perfil4", r"C:\Users\ma038\.agy-perfis\perfil4"),
+    "agy.cmd": ("perfil1", user_home),
+    "agy1.cmd": ("perfil1", user_home),
+    "agy2.cmd": ("perfil2", os.path.join(profiles_base, "perfil2")),
+    "agy3.cmd": ("perfil3", os.path.join(profiles_base, "perfil3")),
+    "agy4.cmd": ("perfil4", os.path.join(profiles_base, "perfil4")),
+    "agy5.cmd": ("agy5", os.path.join(profiles_base, "agy5")),
+    "agy6.cmd": ("agy6", os.path.join(profiles_base, "agy6")),
 }
+
+custom_script = os.path.join(user_home, ".antigravity-custom", "profile_manager.py").replace("\\", "\\\\")
 
 for fname, (pname, proot) in files.items():
     fpath = os.path.join(bin_dir, fname)
@@ -31,13 +38,16 @@ if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%" >nul 2>&1
 if not exist "%ANTIGRAVITY_GEMINI_DIR%" mkdir "%ANTIGRAVITY_GEMINI_DIR%" >nul 2>&1
 if not exist "%ANTIGRAVITY_APP_DATA_DIR%" mkdir "%ANTIGRAVITY_APP_DATA_DIR%" >nul 2>&1
 
-python "C:\\Users\\ma038\\.antigravity-custom\\profile_manager.py" pre-run {pname} >nul 2>&1
+python "{custom_script}" pre-run {pname} >nul 2>&1
 
 "%~dp0agy.exe" %*
 
-python "C:\\Users\\ma038\\.antigravity-custom\\profile_manager.py" post-run {pname} >nul 2>&1
+python "{custom_script}" post-run {pname} >nul 2>&1
 endlocal
 """
-    with open(fpath, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"Updated {fname} -> {pname}")
+    try:
+        with open(fpath, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"Updated {fname} -> {pname}")
+    except Exception as e:
+        print(f"Failed {fname}: {e}")

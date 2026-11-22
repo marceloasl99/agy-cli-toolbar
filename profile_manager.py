@@ -9,14 +9,14 @@ import datetime
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-USER_HOME = r"C:\Users\ma038"
+USER_HOME = os.path.expanduser("~")
 PROFILES_BASE_DIR = os.path.join(USER_HOME, ".agy-perfis")
 CUSTOM_DIR = os.path.join(USER_HOME, ".antigravity-custom")
 ACTIVE_PROFILE_FILE = os.path.join(CUSTOM_DIR, "active_profile.json")
 QUOTAS_CACHE_FILE = os.path.join(CUSTOM_DIR, "profiles_quotas.json")
-AGY_BIN_DIR = r"C:\Users\ma038\AppData\Local\agy\bin"
+AGY_BIN_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.join(USER_HOME, "AppData", "Local")), "agy", "bin")
 CUSTOM_BIN_DIR = os.path.join(CUSTOM_DIR, "bin")
-DESKTOP_EXE = r"C:\Users\ma038\AppData\Local\Programs\antigravity\Antigravity.exe"
+DESKTOP_EXE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.join(USER_HOME, "AppData", "Local")), "Programs", "antigravity", "Antigravity.exe")
 
 # ANSI Colors
 CYAN = "\033[96m"
@@ -458,7 +458,7 @@ def pre_run(target_profile):
                 t_cred = json.load(f)
             if t_cred and t_cred.get("token") and t_cred.get("id_token_email"):
                 write_wincred(t_cred)
-                # Keep staging C:\Users\ma038\.gemini in sync
+                # Keep staging ~/.gemini in sync
                 staging_gemini = os.path.join(USER_HOME, ".gemini")
                 os.makedirs(staging_gemini, exist_ok=True)
                 with open(os.path.join(staging_gemini, "wincred.json"), "w", encoding="utf-8") as f:

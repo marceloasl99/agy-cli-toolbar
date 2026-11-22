@@ -883,11 +883,11 @@ class SettingsDialog(tk.Toplevel):
         active_email = active_info.get("email", "Desconhecido")
 
         info_rows = [
-            ("Usuário Windows:", os.environ.get("USERNAME", "ma038")),
+            ("Usuário Windows:", os.environ.get("USERNAME", "User")),
             ("Perfil & Conta Ativa:", f"{active_key.upper()} — {active_email}"),
             ("Instância Única (Porta IPC):", f"127.0.0.1:{SINGLE_INSTANCE_PORT}"),
             ("Diretório de Configurações:", CUSTOM_DIR),
-            ("Repositório de Código:", r"C:\55\3\agy-cli-toolbar"),
+            ("Repositório de Código:", os.path.dirname(os.path.abspath(__file__))),
             ("Comandos CLI Suportados:", "agy (Perfil 1), agy2 (Perfil 2), agy3 (Perfil 3), agy4 (Perfil 4)..."),
             ("Cotas Suportadas:", "Gemini 3.8 Flash (5h/7d) • GPT/Claude (3P) • Gemini 4 Argon (Pro)")
         ]
@@ -1099,15 +1099,16 @@ class DesktopWidget(tk.Tk):
             self.config_data["grid_preset"] = force_preset
 
         # Adaptive auto-scaling to prevent window from exceeding screen
-        card_h = 310 if getattr(self, "all_expanded", False) else 225
+        is_det = self.config_data.get("card_density") == "detailed"
+        card_h = 320 if getattr(self, "all_expanded", False) else (250 if is_det else 210)
         cur_scale = float(self.config_data.get("ui_scale", 1.20))
 
         needed_w = cols * 350 * cur_scale + 24
-        needed_h = rows * card_h * cur_scale + 85
+        needed_h = rows * card_h * cur_scale + 95
 
         if needed_w > max_w or needed_h > max_h:
             scale_w = (max_w - 30) / (cols * 350.0)
-            scale_h = (max_h - 95) / (rows * float(card_h))
+            scale_h = (max_h - 105) / (rows * float(card_h))
             fit_scale = min(cur_scale, scale_w, scale_h)
             fit_scale = max(round(fit_scale, 2), 0.70)
             cur_scale = fit_scale
@@ -1116,7 +1117,7 @@ class DesktopWidget(tk.Tk):
                 self.zoom_lbl.config(text=f"{int(round(fit_scale * 100))}%")
 
         opt_w = int(round(cols * 350 * cur_scale + 24))
-        opt_h = int(round(rows * card_h * cur_scale + 85))
+        opt_h = int(round(rows * card_h * cur_scale + 95))
 
         w, h, x, y = self.clamp_geometry(opt_w, opt_h)
         self.geometry(f"{w}x{h}+{x}+{y}")
@@ -1129,6 +1130,9 @@ class DesktopWidget(tk.Tk):
         if hasattr(self, "grid_btn"):
             self.grid_btn.config(text=f"⊞ {self.config_data.get('grid_preset', 'Auto')}")
 
+        if hasattr(self, "btn_toggle_mode"):
+            self.btn_toggle_mode.config(text="🎯 4 Perfis" if n > 4 else f"⊞ Todos ({len(profiles)})")
+
         self.refresh_profiles(force=True)
 
     def reset_to_standard_four_profiles(self):
@@ -1136,7 +1140,6 @@ class DesktopWidget(tk.Tk):
         profiles = pm.discover_profiles()
         en_dict = self.config_data.setdefault("enabled_profiles", {})
 
-        # Enable the standard 4 profiles, disable any others
         for k in profiles.keys():
             if k in ("perfil1", "perfil2", "perfil3", "perfil4"):
                 en_dict[k] = True
@@ -1145,8 +1148,31 @@ class DesktopWidget(tk.Tk):
 
         self.config_data["grid_preset"] = "2x2"
         self.config_data["columns"] = 2
+        self.config_data["ui_scale"] = 1.25
         save_widget_config(self.config_data)
         self.auto_fit_layout("2x2")
+
+    def enable_all_available_profiles(self):
+        """Enables all discovered profiles in an optimal 3-column Auto grid."""
+        profiles = pm.discover_profiles()
+        en_dict = self.config_data.setdefault("enabled_profiles", {})
+
+        for k in profiles.keys():
+            if k != "AstroML":
+                en_dict[k] = True
+
+        self.config_data["grid_preset"] = "Auto"
+        self.config_data["columns"] = 3
+        self.config_data["ui_scale"] = 1.10
+        save_widget_config(self.config_data)
+        self.auto_fit_layout("Auto")
+
+    def toggle_profiles_view_mode(self):
+        active_keys, _ = self.get_ordered_enabled_profiles()
+        if len(active_keys) > 4:
+            self.reset_to_standard_four_profiles()
+        else:
+            self.enable_all_available_profiles()
 
     def get_theme(self):
         return THEMES.get(self.config_data.get("theme", "Dark Slate"), THEMES["Dark Slate"])
@@ -1292,6 +1318,15 @@ class DesktopWidget(tk.Tk):
         self.btn_fit.pack(side="right", padx=3)
         self.btn_fit.bind("<Button-1>", lambda e: self.auto_fit_layout())
         ToolTip(self.btn_fit, "Auto-ajustar à tela: Encaixa janela e perfis perfeitamente sem estourar o monitor")
+
+        # Toggle 4 Profiles (2x2) vs All Profiles (Auto/3x2)
+        active_keys, _ = self.get_ordered_enabled_profiles()
+        mode_txt = "🎯 4 Perfis" if len(active_keys) > 4 else "⊞ Todos"
+        self.btn_toggle_mode = tk.Label(self.header, text=mode_txt, font=self.get_font(8, "bold"),
+                                        fg="#a7f3d0", bg=self.theme_colors["header_bg"], cursor="hand2")
+        self.btn_toggle_mode.pack(side="right", padx=3)
+        self.btn_toggle_mode.bind("<Button-1>", lambda e: self.toggle_profiles_view_mode())
+        ToolTip(self.btn_toggle_mode, "Alternar entre modo clássico 4 perfis (2x2) e modo expandido com todos os perfis")
 
         # Quick Zoom Controls in Header: [-] 120% [+]
         self.zoom_frame = tk.Frame(self.header, bg=self.theme_colors["header_bg"])
@@ -2263,6 +2298,12 @@ class TrayApp:
                         elif "RESET4" in data:
                             self.widget.after(0, self.widget.reset_to_standard_four_profiles)
                             conn.sendall(b"RESET4_OK\n")
+                        elif "ENABLEALL" in data:
+                            self.widget.after(0, self.widget.enable_all_available_profiles)
+                            conn.sendall(b"ENABLEALL_OK\n")
+                        elif "TOGGLEMODE" in data:
+                            self.widget.after(0, self.widget.toggle_profiles_view_mode)
+                            conn.sendall(b"TOGGLEMODE_OK\n")
                         elif "AUTOFIT" in data:
                             self.widget.after(0, self.widget.auto_fit_layout)
                             conn.sendall(b"AUTOFIT_OK\n")

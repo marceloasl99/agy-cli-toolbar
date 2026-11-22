@@ -3,4 +3,5 @@ param(
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$ArgsList
 )
-& python "C:\Users\ma038\.antigravity-custom\profile_manager.py" @ArgsList
+$customScript = Join-Path $env:USERPROFILE ".antigravity-custom\profile_manager.py"
+& python $customScript @ArgsList

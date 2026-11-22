@@ -1,150 +1,190 @@
 # Antigravity CLI Toolbar (`agy-cli-toolbar`)
 
-Suíte completa em **Python Puro** para monitoramento de tokens, custos, telemetria, gerenciamento multi-conta e cotas em tempo real do **Google Antigravity (`agy`)**, oferecendo **duas experiências integradas**:
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](https://github.com/marceloasl99/agy-cli-toolbar)
+[![Antigravity](https://img.shields.io/badge/Google%20Antigravity-v2.5%20Ready-purple.svg)](https://github.com/marceloasl99/agy-cli-toolbar)
 
-1. **Versão CLI (`statusline.py` + `agy-profile`)** — Barra de status adaptativa de 3 linhas no terminal + gerenciador de perfis e cotas via linha de comando (Windows, Linux e macOS).
-2. **Versão Windows (`tray_app.pyw`)** — Dashboard flutuante na Área de Trabalho + aplicativo residente na Bandeja do Sistema (System Tray) com painel de configurações avançadas e inicialização com o Windows.
+> 🇧🇷 **Versão em Português:** Para ler a documentação completa em Português do Brasil, acesse o [README.pt-BR.md](README.pt-BR.md).
+
+A pure Python, high-performance telemetry, real-time quota monitor, and multi-account workspace manager for the **Google Antigravity CLI (`agy`)**. It offers two complementary experiences:
+
+1. **CLI Experience (`statusline.py` + `agy-profile`)** — An ultra-fast, adaptive **3-Line Executive Statusline** for terminal environments (Windows Terminal, PowerShell, CMD, Bash, Zsh) with sub-character smooth progress bars, token economics, and multi-profile account isolation.
+2. **Windows Desktop Experience (`tray_app.pyw`)** — A native desktop HUD widget and system tray app with responsive auto-fitting grids (`2x2`, `3x2`, `Auto`), strict screen-bound clamping, in-bar gauges, and hover tooltips detailing model quotas.
 
 ---
 
-## 📊 Estrutura Oficial de Cotas & Modelos Suportados
+## 📊 Official Quota Architecture & Model Families
 
-O projeto espelha exatamente os pools reais reportados pela API do Google Antigravity:
+The Antigravity CLI Toolbar mirrors the exact telemetry and rate-limit pools reported by the official Google Antigravity engine:
 
-| Cota / Pool | Chave na Telemetria | Modelos Exatos Cobertos | Disponibilidade |
+| Quota Pool | Telemetry Key | Exact Covered Models | Plan Availability |
 | :--- | :--- | :--- | :--- |
-| **★ Gemini (5h & 7d)** | `gemini-5h`, `gemini-weekly` | `Gemini 3.8 Flash (Low)`, `Gemini 3.8 Flash (Medium)`, `Gemini 3.8 Flash (High)` | Todos os planos |
-| **⚡ GPT / Claude (Outros 3P)** | `3p-5h`, `3p-weekly` | **Padrão:** `Claude Sonnet 4.6 (Thinking)`, `Claude Opus 4.6 (Thinking)`, `GPT-OSS 120B (Medium)`<br>**Pro:** `Claude Sonnet 5.5`, `Claude Opus 5.5`, `GPT-OSS 120B (Medium)` | Todos os planos |
-| **✦ Argon (WTU Weekly)** | `gemini-argon-wtu-weekly` | `Gemini 4 Argon (Low/Med/High)`, `Gemini 4 Hydrogen (Low/Med/High/XHigh)`, `Gemini 4 Neon (Low/Med/High/XHigh)`, `Orchestrator (Neon / Argon)` | **Exclusivo Plano Pro** *(oculto nos planos padrão)* |
+| **★ Gemini (5h & 7d)** | `gemini-5h`, `gemini-weekly` | `Gemini 3.8 Flash (Low)`, `Gemini 3.8 Flash (Medium)`, `Gemini 3.8 Flash (High)` | Standard & Pro |
+| **⚡ GPT / Claude (Other 3P)** | `3p-5h`, `3p-weekly` | **Standard:** `Claude Sonnet 4.6 (Thinking)`, `Claude Opus 4.6 (Thinking)`, `GPT-OSS 120B (Medium)`<br>**Pro:** `Claude Sonnet 5.5`, `Claude Opus 5.5`, `GPT-OSS 120B (Medium)` | Standard & Pro |
+| **✦ Argon (Weekly WTU)** | `gemini-argon-wtu-weekly` | `Gemini 4 Argon (Low/Med/High)`, `Gemini 4 Hydrogen (Low/Med/High/XHigh)`, `Gemini 4 Neon (Low/Med/High/XHigh)`, `Orchestrator (Neon / Argon)` | **Pro Plan Exclusive** *(automatically hidden on Standard plans)* |
 
 ---
 
-## 1️⃣ Tipo 1: Versão CLI (`statusline.py` + `agy-profile`)
+## 1️⃣ CLI Experience: 3-Line Executive Statusline
 
-Ideal para quem trabalha direto no terminal (Windows Terminal, PowerShell, CMD, Bash ou Zsh) e quer telemetria completa sem sair do fluxo de código.
+Engineered in **pure Python with zero external dependencies and sub-10ms render latency**, featuring sub-character 1/8th smooth block rendering (`▏`, `▎`, `▍`, `▌`, `▋`, `▊`, `▉`, `█`).
 
-### 📸 Screenshots da Versão CLI
+### 📸 Terminal Previews
 
-#### Barra de Status de 3 Linhas no Antigravity CLI (`statusline.py`)
+#### Antigravity CLI 3-Line Statusline in Action
 ![Antigravity CLI Toolbar Real Terminal Capture](assets/real_terminal_preview.png)
-> *Captura real do Google Antigravity CLI rodando com a `statusline.py` de 3 linhas ativa.*
+> *Live terminal capture showing the 3-line statusline rendering reasoning state, token economics, rolling quotas, subagent swarms, and system health.*
 
-#### Gerenciador Multi-Perfil & Cotas no Terminal (`agy-profile list`)
+#### Multi-Profile & Quota Terminal Overview (`agy-profile list`)
 ![Antigravity CLI Profiles List](assets/cli_profiles_preview.png)
-> *Listagem colorida dos perfis isolados, contas conectadas, barras de cota por família e modelos exatos.*
+> *Colorized terminal view displaying isolated Google accounts, OAuth status, quota bars per model family, and exact model coverage.*
 
 ---
 
-### 🔍 Detalhes da Arquitetura CLI
-
-#### A. Barra de Status Adaptativa de 3 Níveis (`statusline.py`)
-Construída em **Python Puro (zero dependências externas, latência < 10 ms)** com barras suaves sub-caractere (`▏`, `▎`, `▍`, `▌`, `▋`, `▊`, `▉`, `█`):
+### 🔍 3-Line Terminal Architecture
 
 ```text
 [ IDLE ]  │ #29bfb6f9 "My Project" │ ✦ Gemini 3.8 Flash ⚡medium [auto] │ Tokens: [██████▍░░░░░░░░░░░░░░░░░] 26.8% (In:165.0k Out:12.4k ⚡cache:54.0k Total:177.4k/1.05M) │ Cost: $0.1399 (Saved $0.0304) │ ⏱ 45m
-5h: [█████▎░░░░░░░░░░░░░░] 26% (reset 2h43m) │ 7d: [██▍░░░░░░░░░░░░░░░░░] 12% (120h) │ 🟢 Safe Pace │ 👤 user@dev.io [Pro] │ 🤖 Subagents (1): researcher │ ⚙️ Tasks:1 │ 📄 Docs:4
-🧠 RAM: [████▌░░░] 56%/23G │ 🖥️ Windows │ 📁 agy-cli-toolbar │ git:main* +1-0 │ 🔌 MCP:3 active │ ⚡ Skills:8 │ 🛡️ Sandbox:ON │ 🕒 23:16:56 │ agy v1.4.12 • Py3.14
+5h: [█████▎░░░░░░░░░░░░░░] 26% (reset 2h43m) │ 7d: [██▍░░░░░░░░░░░░░░░░░] 12% (120h) │ 🟢 Safe Pace │ 👤 user@example.com [Pro] │ 🤖 Subagents (1): researcher │ ⚙️ Tasks:1 │ 📄 Docs:4
+🧠 RAM: [████▌░░░] 56%/23G │ 🖥️ Windows │ 📁 agy-cli-toolbar │ git:main* +1-0 │ 🔌 MCP:3 active │ ⚡ Skills:8 │ 🛡️ Sandbox:ON │ 🕒 11:15:00 │ agy v1.4.12 • Py3.14
 ```
 
-* **Linha 1 — Raciocínio, Modelo & Custos API:** Badge de ciclo de vida (`IDLE`, `THINKING`, `TOOL USE`), ID da conversa (`#29bfb6f9`), modelo e nível de *thinking effort*, barra de saturação de contexto de 24 blocos (com alerta `[>200k]`), custo comercial estimado em USD + economia de prompt cache, throughput em `t/s` e tempo decorrido.
-* **Linha 2 — Pools de Cotas, Velocidade & Agentes:** Barras de 20 blocos para cota de **5h** e **7d**, indicador de *burn rate* (`🟢 Safe Pace` vs `🔥 Burn`), email/perfil ativo e plano, contagem de subagents em execução, tarefas assíncronas e documentos. Sincroniza automaticamente as cotas reais (`gemini-5h`, `gemini-weekly`, `3p-5h`, `gemini-argon-wtu-weekly`) no cache compartilhado `~/.antigravity-custom/profiles_quotas.json`.
-* **Linha 3 — Ambiente, Workspace & Tooling:** Uso real de RAM do host, sistema operacional, diretório do projeto, branch Git com flags de modificações e commits à frente/atrás, servidores MCP ativos, skills carregadas, status do sandbox, relógio e versão do runtime.
-* **Responsividade Automática:** Adapta automaticamente blocos e comprimentos de barra para terminais largos (`>= 140` colunas), médios (`100–139`) e painéis divididos estreitos (`< 100`).
+* **Line 1 — Agent Lifecycle, Model & Token Economics:**
+  * Real-time lifecycle badge (`IDLE`, `THINKING`, `TOOL USE`).
+  * Conversation identifier (`#29bfb6f9`) and project title.
+  * Active model family, thinking effort level (`⚡low`, `⚡medium`, `⚡high`), and execution mode (`[auto]`).
+  * 24-character context saturation gauge with `[>200k]` overflow indicator.
+  * Exact token breakdown: Input, Output, and Prompt Cache hits.
+  * Estimated commercial API session cost (USD) + prompt cache savings.
+  * Live generation velocity (`tokens/sec`) and elapsed session timer.
 
-#### B. Gerenciador de Perfis Isolados (`profile_manager.py` / `agy-profile`)
-Permite usar várias contas Google sem conflito de sessão nem vazamento de credenciais entre perfis (`~/.agy-perfis/perfil1`, `perfil2`, ...), alternando tokens com segurança no **Windows Credential Manager** e criando atalhos CLI dedicados (`agy`, `agy2`, `agy3`, `agy4`...).
+* **Line 2 — Rate-Limit Quota Pools, Velocity & Swarm Telemetry:**
+  * Rolling **5-hour** and **7-day weekly** quota saturation bars with exact reset countdowns.
+  * Dynamic quota burn rate indicator (`🟢 Safe Pace` vs `🔥 Burn: X%/h`).
+  * Active Google profile identifier, authenticated email, and plan tier (`[Pro]` / `[Standard]`).
+  * Active autonomous subagent swarm monitor (`🤖 Subagents (N)`).
+  * Background async task counter and generated artifact/document tally.
+  * Auto-syncs live quota metrics to `~/.antigravity-custom/profiles_quotas.json`.
 
-| Comando | Descrição |
+* **Line 3 — System Health, Workspace & Tooling Engine:**
+  * Host RAM memory utilization gauge (`🧠 RAM: [████▌░░░] 56%/23G`) via native OS calls.
+  * Host OS identifier and active project workspace directory.
+  * Git VCS status: active branch, dirty state (`*`), and ahead/behind commit diffs (`+1-0`).
+  * Connected Model Context Protocol (MCP) servers count.
+  * Registered Antigravity agent skills count.
+  * Security sandbox containment status (`🛡️ Sandbox:ON`).
+  * Real-time 24-hour local clock and Python/runtime version tags.
+
+* **Adaptive Responsiveness:**
+  * Automatically switches layouts based on terminal width: Wide (`>= 140` cols), Medium (`100–139` cols), and Compact Split-Pane (`< 100` cols).
+
+---
+
+### 👥 Multi-Profile Account Isolation (`agy-profile`)
+
+Isolates individual Google accounts into dedicated sandboxes (`~/.agy-perfis/perfil1`, `perfil2`, `perfil3`, `perfil4`, `agy5`, `agy6`...) without token collisions or session cross-contamination.
+
+| Command | Action |
 | :--- | :--- |
-| `agy-profile` | Abre o **Menu Interativo** colorido no terminal para gerenciar perfis |
-| `agy-profile list` | Lista todos os perfis com email, status OAuth, **barras de cota (Gemini 5h/7d, Outros 3P, Argon Pro)** e modelos exatos |
-| `agy-profile switch <num\|nome>` | Alterna o perfil ativo no sistema e sincroniza as credenciais |
-| `agy-profile create <nome> [email]` | Cria um novo perfil isolado com `.gemini`, `settings.json` e comando `agy<N>` dedicado |
-| `agy-profile auth <num\|nome>` | Autenticação **OAuth 2.0 (PKCE)** via navegador web local (porta `8085`), Desktop 1-clique ou cópia de perfil |
-| `agy-profile desktop <num\|nome>` | Abre o **Antigravity Desktop** isolado (`--user-data-dir`) no perfil selecionado |
-| `agy-profile run <num\|nome> [args]` | Executa o `agy` CLI isolado nas variáveis de ambiente do perfil |
-| `agy-profile tray` *(ou `agy-tray`)* | Inicia a **Versão Windows** (Tray + Dashboard Widget) |
-| `agy-profile autostart on\|off` | Configura inicialização silenciosa no Startup do Windows |
+| `agy-profile` | Opens interactive terminal menu for managing accounts |
+| `agy-profile list` | Lists all accounts, OAuth connection states, quotas, and model coverage |
+| `agy-profile switch <num\|id>` | Switches the active system profile and synchronizes credentials |
+| `agy-profile create <name> [email]` | Creates a new sandboxed profile with `.gemini`, `settings.json`, and dedicated CLI launchers |
+| `agy-profile auth <num\|id>` | Triggers **OAuth 2.0 PKCE** browser login, Desktop 1-Click login, or profile cloning |
+| `agy-profile desktop <num\|id>` | Launches isolated **Antigravity Desktop** (`--user-data-dir`) for selected profile |
+| `agy-profile run <num\|id> [args]` | Runs `agy` CLI inside the sandboxed environment of the specified profile |
+| `agy-profile delete <num\|id>` | Safely deletes an extra profile and removes its launcher scripts |
+| `agy-profile tray` *(or `agy-tray`)* | Starts the Windows Tray & Floating Dashboard HUD |
+| `agy-profile autostart on\|off` | Toggles automatic silent launch on Windows startup |
 
 ---
 
-## 2️⃣ Tipo 2: Versão Windows (`tray_app.pyw` — Dashboard & Bandeja)
+## 2️⃣ Windows Experience: Floating Dashboard & System Tray (`tray_app.pyw`)
 
-Aplicativo gráfico nativo para Windows (Tkinter + `pystray` + Win32 API) que roda silenciosamente em segundo plano sem janela de console (`pythonw`), oferecendo visualização simultânea de todas as suas contas Google em um **Widget Flutuante** com atualização automática.
+A native, zero-console background application (`pythonw.exe`) combining a custom **Floating Desktop HUD** with a **Windows System Tray** controller (`pystray`).
 
-### 📸 Screenshots da Versão Windows
+### 📸 Windows Desktop Previews
 
-#### Dashboard Flutuante — Modo Compacto (In-Bar)
-![Antigravity Windows Dashboard Compacto](assets/windows_dashboard.png)
-> *Grade uniforme `2x2` com Faixa Executiva KPI no topo, barras compactas com percentual usado/livre e countdown embutidos, destaque do perfil ativo e ocultação automática do Argon nos planos padrão.*
+#### Floating HUD — Compact In-Bar View
+![Antigravity Windows Dashboard Compact](assets/windows_dashboard.png)
+> *Symmetric grid with Executive KPI Strip, in-bar percentage & reset countdowns, active profile highlight, and automatic Argon hiding on standard plans.*
 
-#### Dashboard Flutuante — Modo Detalhado (Gavetas Expandidas)
-![Antigravity Windows Dashboard Detalhado](assets/windows_dashboard_detailed.png)
-> *Exibição expandida (`▼ Detalhes` / `▲ Resumo`) revelando os modelos exatos cobertos por cada cota diretamente nos cartões.*
+#### Floating HUD — Expanded Model Breakdown Drawer
+![Antigravity Windows Dashboard Detailed](assets/windows_dashboard_detailed.png)
+> *Expanded view (`▼ Detalhes`) displaying the exact model coverage of each quota pool directly inside the profile cards.*
 
-#### Centro de Configurações Avançadas (`⚙️ Ajustes`)
-![Antigravity Windows Configurações](assets/windows_settings.png)
-> *Painel completo de `880x640` com rolagem em todas as 5 abas: Aparência & Grade, Perfis & Ordem, Cotas & Alertas, Sistema & Windows e Sobre & Diagnóstico.*
-
----
-
-### 🔍 Detalhes da Arquitetura Windows
-
-* **Faixa Executiva de Resumo (KPI Strip):** Mostra em tempo real o **perfil ativo**, a recomendação automática **`💡 Melhor Livre`** (clique único para trocar para a conta com mais cota disponível) e o resumo de contas conectadas e contas Pro.
-* **Barras In-Bar Ultra-Compactas & Monitoramento Rápido (2s):** Observa modificações em `profiles_quotas.json` a cada **2 segundos** para refletir instantaneamente o consumo reportado pela `statusline.py`, exibindo `% usada`, `% livre` e tempo até o reset dentro da própria barra.
-* **Hover Tooltips Dinâmicos & Gaveta de Modelos:**
-  * Ao passar o mouse sobre qualquer barra de cota, um balão flutuante exibe os valores atuais e a lista completa de modelos exatos daquele pool.
-  * O botão individual **`▼ Detalhes`** no cartão (ou **`▼ Detalhes`** global no cabeçalho) expande/recolhe a gaveta com os modelos em cada cartão.
-* **Auto-Fit Adaptativo & Clamp Rígido de Resolução:** A janela do dashboard **nunca** ultrapassa em pixels os limites do monitor (`screen_w` e `screen_h`), recalculando dinamicamente a escala de zoom e dimensões ideais com margem de segurança para a barra de tarefas. O botão **`⛶ Fit`** no cabeçalho e o preset **`Auto`** organizam e encaixam tudo automaticamente.
-* **Gestão e Exclusão Segura de Perfis:** Exclusão com 1-clique via interface gráfica (`🗑️ Excluir Perfil...` no menu do cartão ou no Centro de Configurações) ou via CLI (`agy-profile delete <nome>`), além do botão **`🎯 4 Perfis (2x2)`** para restaurar a grade 2x2 com facilidade a qualquer momento.
-* **Grade Rígida Simétrica & Presets Rápidos:** Uso de `uniform` grid no Tkinter garantindo que todos os cartões tenham exatamente o mesmo tamanho em qualquer layout (`Auto`, `2x2`, `3x2`, `1x4`, `4x1`, `2x3`, `1x2`, `2x1`, etc.), além de alça de redimensionamento livre (`◢`) com clamp de bordas.
-* **Menu Rápido de Contexto (`⋮` ou Botão Direito):** Acesso imediato em qualquer cartão para abrir terminal CLI (`⚡ CLI (agyN)`), abrir app Desktop (`🖥️ Desktop`), ativar perfil, alternar modo detalhado, ocultar perfil do dashboard, excluir permanentemente, renomear apelido ou abrir pasta do perfil.
-* **Personalização Completa:** 4 temas (`Dark Slate`, `Midnight OLED`, `Cyberpunk Neon`, `Emerald Tech`), ajuste de zoom (`75%–200%`), ajuste fino de fonte (`-1` a `+3`), controle de opacidade (`60%–100%`), Modo Privacidade (mascaramento de emails para gravações/streaming) e travamento de posição (`🔒 Fixado` / `🔓 Mover`).
-* **Bandeja do Sistema (`pystray`) & Instância Única:** Controle via ícone ao lado do relógio do Windows e trava com Win32 Named Mutex + Socket IPC (`127.0.0.1:49285`) para que o atalho na Área de Trabalho traga a janela aberta para primeiro plano sem criar duplicatas.
+#### Advanced Settings Center (`⚙️ Ajustes`)
+![Antigravity Windows Settings](assets/windows_settings.png)
+> *Unified 880x640 configuration center with smooth vertical scrolling across all 5 preference categories.*
 
 ---
 
-## ⚖️ Comparativo Rápido: Versão CLI vs. Versão Windows
+### 🔍 Windows Architecture Highlights
 
-| Recurso | Versão CLI (`statusline.py` / `agy-profile`) | Versão Windows (`tray_app.pyw`) |
+* **Adaptive Auto-Fit & Screen Clamp (Never Exceeds Resolution):**
+  * Window dimensions (`width` and `height`) are strictly clamped to your screen resolution (`max_w = screen_w - 40`, `max_h = screen_h - 70`).
+  * The **`⛶ Fit`** button and **`Auto`** preset dynamically calculate the optimal zoom scale (`ui_scale`) and dimensions to ensure cards never overflow or get cut off.
+* **Instant 4-Profile / All-Profile Toggle:**
+  * Quick header button: switch seamlessly between **`🎯 4 Perfis (2x2)`** and **`⊞ Todos (3x2)`** with a single click.
+* **Ultra-Compact In-Bar Gauges & Fast 2s Monitoring:**
+  * Watches `profiles_quotas.json` every 2 seconds to immediately reflect quota usage recorded by `statusline.py`.
+  * Displays `% used`, `% free`, and reset countdown right inside the bar track.
+* **Dynamic Hover Tooltips:**
+  * Hovering over any quota bar pops up a styled tooltip detailing the exact model list, remaining percentage, and reset time.
+* **Executive KPI Strip:**
+  * Displays the current active profile, total connected accounts, Pro plans, and the **`💡 Melhor Livre`** one-click shortcut to switch to the account with the highest free quota.
+* **Context Menu (`⋮` or Right Click):**
+  * Direct card actions: launch CLI terminal (`⚡ CLI (agyN)`), launch Desktop app, switch active account, toggle detailed view, rename nickname, or open profile folder.
+* **Themes & Personalization:**
+  * 4 dark themes (`Dark Slate`, `Midnight OLED`, `Cyberpunk Neon`, `Emerald Tech`).
+  * Zoom scaling (`75%` to `200%`), font size offsets, opacity slider (`60%` to `100%`), and Privacy Mode (masks emails for recording/streaming).
+* **Single Instance & IPC Socket:**
+  * Win32 Named Mutex paired with a local IPC TCP socket (`127.0.0.1:49285`) ensures clicking desktop shortcuts instantly focuses the existing HUD without duplicate processes.
+
+---
+
+## ⚖️ Feature Comparison: CLI vs. Windows Experience
+
+| Feature | CLI Experience (`statusline.py` / `agy-profile`) | Windows Experience (`tray_app.pyw`) |
 | :--- | :--- | :--- |
-| **Onde roda** | Dentro do terminal (`agy` CLI / PowerShell / Bash) | Desktop do Windows + Bandeja do Sistema (System Tray) |
-| **Compatibilidade** | Windows, Linux e macOS | Windows 10 / 11 |
-| **Foco Principal** | Telemetria da sessão atual (tokens, custo USD, t/s, Git, MCP, RAM) e troca rápida via CLI | Visão consolidada multi-contas simultânea com KPIs, gráficos in-bar e clique para abrir sessões |
-| **Atualização de Cotas** | Captura em tempo real direto do `stdin` do `agy` e grava em `profiles_quotas.json` | Lê `profiles_quotas.json` a cada 2s e redesenha os cartões *in-place* sem cintilação |
-| **Dependências** | Python 3.8+ (biblioteca padrão apenas) | Python 3.8+, `pystray`, `Pillow`, `tkinter` |
+| **Execution Context** | Inside terminal (`agy` CLI / PowerShell / Bash / Zsh) | Native Windows Desktop + System Tray |
+| **Supported OS** | Windows, Linux, and macOS | Windows 10 / 11 |
+| **Primary Purpose** | Real-time session telemetry (tokens, cost, TPS, RAM, Git) | Multi-account overview, consolidated quotas, and quick launch |
+| **Update Mechanism** | Reads live engine `stdin` during session execution | Polls `profiles_quotas.json` every 2s with in-place UI updates |
+| **Dependencies** | Python 3.8+ (Standard Library only) | Python 3.8+, `pystray`, `Pillow`, `tkinter` |
 
 ---
 
-## 🛠️ Instalação
+## 🛠️ Installation
 
-### Opção 1: Instalador Automático 1-Clique (Recomendado)
+### Option 1: 1-Click Automated Installer (Recommended)
 
-#### Windows (PowerShell — instala CLI + Tray/Widget + Atalho):
+#### Windows (PowerShell — Installs CLI + Windows Tray/HUD + Desktop Shortcut):
 ```powershell
 irm https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/install.ps1 | iex
 ```
 
-#### Linux / macOS (Bash — versão CLI):
+#### Linux / macOS (Bash — Installs CLI Experience):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/install.sh | bash
 ```
 
 ---
 
-### Opção 2: Instalação Manual (Versão CLI)
+### Option 2: Manual Installation (CLI Experience)
 
-1. Crie o diretório `~/.antigravity-custom` e copie `statusline.py` e `profile_manager.py` para ele.
-2. Abra o arquivo de configuração do Antigravity CLI:
-   * **Windows:** `C:\Users\<SEU_USUARIO>\.gemini\antigravity-cli\settings.json`
+1. Create directory `~/.antigravity-custom` and copy `statusline.py` and `profile_manager.py` into it.
+2. Edit your Antigravity CLI configuration file:
+   * **Windows:** `%USERPROFILE%\.gemini\antigravity-cli\settings.json`
    * **Linux/macOS:** `~/.gemini/antigravity-cli/settings.json`
-3. Adicione o bloco `statusLine`:
+3. Add or update the `statusLine` block:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "python C:\\Users\\<SEU_USUARIO>\\.antigravity-custom\\statusline.py",
+    "command": "python ~/.antigravity-custom/statusline.py",
     "padding": 0,
     "stack_with_default": false,
     "enabled": true
@@ -152,40 +192,11 @@ curl -fsSL https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/i
 }
 ```
 
-> **Flags importantes:**
-> * `"padding": 0`: Elimina linhas em branco extras acima da barra de status.
-> * `"stack_with_default": false`: Substitui o rodapé padrão do CLI para um visual limpo.
-
 ---
 
-## 🎮 Uso Rápido & Inicialização
+## ⚙️ Configuration (`config.json`)
 
-### Testar a Statusline em Sessão CLI Aberta (sem reiniciar)
-```bash
-/statusline python C:\Users\<SEU_USUARIO>\.antigravity-custom\statusline.py
-```
-
-### Iniciar o Dashboard Windows (Tray + Widget)
-```powershell
-agy-tray
-```
-*(Ou via `agy-profile tray` / atalho `Antigravity Quotas` na Área de Trabalho)*
-
-### Comandos Rápidos do CLI (`agy-profile`):
-```bash
-agy-profile list                   # Lista todos os perfis, cotas, modelos e status
-agy-profile switch <nome_ou_num>   # Alterna instantaneamente o perfil ativo
-agy-profile create <nome> [email]  # Cria um novo perfil isolado com launcher dedicado
-agy-profile delete <nome>          # Exclui um perfil e seus arquivos com segurança
-agy-profile auth <nome_ou_num>     # Inicia o fluxo de autenticação OAuth 2.0
-agy-profile desktop <nome_ou_num>  # Abre a IDE Antigravity Desktop no perfil selecionado
-```
-
----
-
-## ⚙️ Customização da Versão CLI (`config.json`)
-
-Personalize os módulos e o tema da barra de terminal em `~/.antigravity-custom/config.json`:
+Customize themes and telemetry toggles by placing a `config.json` inside `~/.antigravity-custom/`:
 
 ```json
 {
@@ -202,6 +213,7 @@ Personalize os módulos e o tema da barra de terminal em `~/.antigravity-custom/
   "show_tasks": true,
   "show_artifacts": true,
   "show_email": true,
+  "show_profile": true,
   "show_ram": true,
   "show_workspace": true,
   "show_git": true,
@@ -213,26 +225,11 @@ Personalize os módulos e o tema da barra de terminal em `~/.antigravity-custom/
 }
 ```
 
-### Temas Disponíveis no CLI:
-* `"default"`: Cores ANSI modernas de alto contraste.
-* `"tokyo_night"`: Paleta 24-bit TrueColor Tokyo Night.
-* `"catppuccin"`: Paleta 24-bit TrueColor Catppuccin Mocha.
-* `"nord"`: Paleta 24-bit TrueColor Nord Arctic.
-* `"cyberpunk"`: Paleta 24-bit TrueColor Neon Cyberpunk.
-* `"plain"`: Modo texto limpo sem preenchimento de fundo (suporta `NO_COLOR`).
+* **Themes available:** `default`, `tokyo_night`, `catppuccin`, `nord`, `cyberpunk`, `plain`.
 
 ---
 
-## 🧪 Testes Automatizados
+## 📄 License
 
-Execute a suíte de testes integrada validando o layout de 3 linhas, alertas de consumo e escala responsiva:
-
-```bash
-python tests/test_statusline.py
-```
-
----
-
-## 📄 Licença
-
-MIT License. Livre para uso pessoal e comercial.
+Distributed under the **MIT License**. Free for personal and commercial use.
+Created for the **Google Antigravity** community.

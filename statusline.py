@@ -390,24 +390,24 @@ def get_active_profile_name(email=None):
     if env_p:
         return env_p
     if email:
-        email_map = {
-            "marcelo.thermomix@gmail.com": "perfil1",
-            "sartorimarcelo@gmail.com": "perfil1",
-            "masl90380@gmail.com": "perfil2",
-            "ma0381@gmail.com": "perfil3",
-            "muvytec@gmail.com": "perfil4"
-        }
-        if email in email_map:
-            return email_map[email]
         # Dynamic fallback across ~/.agy-perfis directories
         perfis_dir = os.path.join(os.path.expanduser("~"), ".agy-perfis")
         if os.path.exists(perfis_dir):
             for p_name in sorted(os.listdir(perfis_dir)):
-                w_file = os.path.join(perfis_dir, p_name, ".gemini", "wincred.json")
+                p_dir = os.path.join(perfis_dir, p_name, ".gemini")
+                w_file = os.path.join(p_dir, "wincred.json")
+                a_file = os.path.join(p_dir, "google_accounts.json")
                 if os.path.exists(w_file):
                     try:
                         with open(w_file, "r", encoding="utf-8") as f:
                             if json.load(f).get("id_token_email") == email:
+                                return p_name
+                    except Exception:
+                        pass
+                if os.path.exists(a_file):
+                    try:
+                        with open(a_file, "r", encoding="utf-8") as f:
+                            if json.load(f).get("active") == email:
                                 return p_name
                     except Exception:
                         pass
@@ -422,7 +422,8 @@ def get_active_profile_name(email=None):
     gem_home = os.environ.get("GEMINI_HOME") or os.environ.get("PERFIL_ROOT")
     if gem_home:
         base = os.path.basename(gem_home)
-        if base and base != "ma038":
+        cur_user = os.environ.get("USERNAME", "")
+        if base and base != cur_user and not base.startswith("."):
             return base
     return "perfil1"
 
