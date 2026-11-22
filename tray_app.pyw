@@ -1457,16 +1457,15 @@ class DesktopWidget(tk.Tk):
         outros_bar["cv"].pack(fill="x", expand=True)
         ToolTip(outros_bar["cv"], "⚡ COTA OUTROS (GPT / Claude):\n• GPT-4o\n• GPT-4o-mini\n• Claude 3.5 Sonnet\n• Claude 3.7 Sonnet\n• o3-mini\nCota unificada de modelos 3P.")
 
-        # 4. Argon (Pro) in-bar - SEMPRE PRESENTE PARA PADRÃO DE TAMANHO 100% IDÊNTICO
+        # 4. Argon (Pro) in-bar - Criado aqui, empacotado apenas em perfis com plano Pro
         argon_row = tk.Frame(bars_container, bg=card_bg)
-        argon_row.pack(fill="x", pady=1)
         argon_bar = self.create_compact_bargraph(argon_row)
         argon_bar["cv"].pack(fill="x", expand=True)
         if not hasattr(self, "argon_tooltips"):
             self.argon_tooltips = {}
         self.argon_tooltips[key] = ToolTip(argon_bar["cv"], "✦ COTA ARGON (Plano Pro Pago)")
 
-        # Row 4: Expandable Drawer (Lista explicativa detalhada de modelos por cota - idêntica em todos!)
+        # Row 4: Expandable Drawer (Lista explicativa detalhada de modelos por cota)
         drawer = tk.Frame(card, bg=self.theme_colors.get("header_bg", "#0f172a"), bd=1, relief="solid",
                           highlightbackground=border_col, highlightthickness=1)
         
@@ -1482,9 +1481,8 @@ class DesktopWidget(tk.Tk):
         tk.Label(f_out_det, text="⚡ Outros:", font=self.get_font(7, "bold"), fg="#34d399", bg=drawer["bg"]).pack(side="left")
         tk.Label(f_out_det, text="GPT-4o • GPT-4o-mini • Claude 3.5/3.7 • o3-mini", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"]).pack(side="left", padx=4)
 
-        # Seção Argon no Drawer - SEMPRE PRESENTE PARA ALTURA IDÊNTICA
+        # Seção Argon no Drawer - Empacotada apenas se is_pro for True
         f_arg_det = tk.Frame(drawer, bg=drawer["bg"])
-        f_arg_det.pack(fill="x", padx=6, pady=2)
         lbl_arg_title = tk.Label(f_arg_det, text="✦ Argon (Pro):", font=self.get_font(7, "bold"), fg="#c084fc", bg=drawer["bg"])
         lbl_arg_title.pack(side="left")
         lbl_arg_models = tk.Label(f_arg_det, text="Argon Reasoning • DeepMind Frontier", font=self.get_font(7), fg="#cbd5e1", bg=drawer["bg"])
@@ -1493,9 +1491,9 @@ class DesktopWidget(tk.Tk):
         if is_expanded:
             drawer.pack(fill="x", padx=8, pady=(2, 4))
 
-        # Row 5: Action Buttons Row (Ultra-compact)
+        # Row 5: Action Buttons Row (Ultra-compact, ancorado na base para alinhamento perfeito)
         btn_box = tk.Frame(card, bg=card_bg)
-        btn_box.pack(fill="x", padx=8, pady=(2, 4))
+        btn_box.pack(fill="x", side="bottom", padx=8, pady=(2, 4))
 
         btn_cmd = tk.Button(btn_box, text=f"⚡ CLI ({cmd_name})", font=self.get_font(8, "bold"), fg="#ffffff", bg="#0284c7",
                             activebackground="#0369a1", activeforeground="#ffffff", bd=0, padx=6, pady=2, cursor="hand2",
@@ -1529,6 +1527,7 @@ class DesktopWidget(tk.Tk):
             "argon_row": argon_row,
             "argon_bar": argon_bar,
             "drawer": drawer,
+            "f_arg_det": f_arg_det,
             "lbl_arg_title": lbl_arg_title,
             "lbl_arg_models": lbl_arg_models,
             "btn_activate": btn_activate
@@ -1630,22 +1629,24 @@ class DesktopWidget(tk.Tk):
         l_ot, r_ot = format_bar_texts("Outros (GPT/Claude)", used_ot, ot.get("reset_in_seconds", 0), "⚡ ")
         self.update_compact_bargraph(view["outros_bar"], used_ot, l_ot, r_ot, theme_color="#10b981", track_color="#064e3b")
 
-        # 4. Update Argon In-Bar (Atualizado de forma uniforme em todos os cartões)
+        # 4. Update Argon In-Bar (Exibe no Pro, esconde completamente nos planos sem Argon)
         if is_pro:
+            if not view["argon_row"].winfo_ismapped():
+                view["argon_row"].pack(fill="x", pady=1)
             l_ar, r_ar = format_bar_texts("Argon (Pro)", used_ar, ar.get("reset_in_seconds", 0), "✦ ")
             self.update_compact_bargraph(view["argon_bar"], used_ar, l_ar, r_ar, theme_color="#c084fc", track_color="#3b0764")
+            if not view["f_arg_det"].winfo_ismapped():
+                view["f_arg_det"].pack(fill="x", padx=6, pady=2)
             view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#c084fc")
             view["lbl_arg_models"].config(text="Argon Reasoning • DeepMind Frontier", fg="#cbd5e1", font=self.get_font(7))
             if hasattr(self, "argon_tooltips") and key in self.argon_tooltips:
                 self.argon_tooltips[key].text_func = "✦ COTA ARGON (Plano Pro Pago):\n• Argon Advanced Reasoning\n• Google DeepMind Frontier\nExclusivo da conta Pro ativa."
         else:
-            l_ar = "✦ Argon (Pro)  0.0%"
-            r_ar = "— Requer Plano Pro"
-            self.update_compact_bargraph(view["argon_bar"], 0.0, l_ar, r_ar, theme_color="#334155", track_color="#1e293b")
-            view["lbl_arg_title"].config(text="✦ Argon (Pro):", fg="#64748b")
-            view["lbl_arg_models"].config(text="Disponível no Plano Pro pago", fg="#64748b", font=self.get_font(7, "italic"))
-            if hasattr(self, "argon_tooltips") and key in self.argon_tooltips:
-                self.argon_tooltips[key].text_func = "✦ COTA ARGON (Plano Pro Pago):\n• Não disponível neste perfil (Requer assinatura Pro)"
+            # Esconde completamente a barra do Argon e os detalhes nos planos padrão sem Argon!
+            if view["argon_row"].winfo_ismapped():
+                view["argon_row"].pack_forget()
+            if view["f_arg_det"].winfo_ismapped():
+                view["f_arg_det"].pack_forget()
 
         # Update Drawer Visibility
         if is_expanded:
