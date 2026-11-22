@@ -98,12 +98,35 @@ Isola contas Google em diretórios independentes (`~/.agy-perfis/perfil1`, `perf
 | `agy-profile reset-auth <num\|id>` | Coloca credenciais salvas do perfil em quarentena para refazer o login |
 | `agy-profile bind <perfil> <email>` | Vincula manualmente um perfil ao e-mail Google esperado |
 | `agy-profile capture <perfil>` | Captura a sessão ativa do Windows Credential Manager para o perfil informado |
+| `agy-profile share-sessions` | Garante junctions e banco de conversas unificado para `/resume` entre todos os perfis |
 | `agy-profile launchers` | Regera os launchers canônicos `agy1.cmd`..`agyN.cmd` e limpa atalhos antigos |
 | `agy-profile desktop <num\|id>` | Abre o **Antigravity Desktop** isolado (`--user-data-dir`) para a conta selecionada |
 | `agy-profile run <num\|id> [args]` | Executa o `agy` CLI nas variáveis de ambiente isoladas do perfil |
 | `agy-profile delete <num\|id>` | Exclui com segurança um perfil adicional e remove seus scripts de launcher |
 | `agy-profile tray` *(ou `agy-tray`)* | Inicia o Dashboard Flutuante e o ícone na Bandeja do Windows |
 | `agy-profile autostart on\|off` | Configura inicialização silenciosa ao ligar o computador |
+
+---
+
+### 🔄 Continuidade de Sessões e `/resume` Cross-Perfil
+
+Você pode iniciar um projeto no **`agy2`**, esgotar as cotas/tokens, e imediatamente abrir o **`agy4`** (ou qualquer outro perfil) para continuar **exatamente de onde parou**:
+
+```bash
+# Iniciou o trabalho no perfil 2:
+C:\Projetos\meuapp> agy2
+# (acabou o token/cota; saia da sessão)
+
+# Continue imediatamente no perfil 4:
+C:\Projetos\meuapp> agy4 -c
+# OU
+C:\Projetos\meuapp> agy4
+/resume
+```
+
+**Como funciona sob o capô (Sessões Compartilhadas em Dupla Camada):**
+- **Armazenamento Unificado de Conversas:** `conversation_summaries.db`, `conversations/*.db`, `brain/` e `history.jsonl` são compartilhados via Junctions NTFS (`mklink /J`) apontando para `%USER_HOME%\.gemini\antigravity-cli`.
+- **Isolamento 100% Estrito de Credenciais:** As contas e credenciais (`wincred.json`, `google_accounts.json`, `profile_identity.json`) permanecem estritamente privadas na raiz de cada perfil (`%PERFIL_ROOT%\.gemini\`), garantindo zero vazamento de contas com continuidade total das conversas.
 
 ---
 

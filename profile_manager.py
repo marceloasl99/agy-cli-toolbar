@@ -514,9 +514,14 @@ def pre_run(target_profile, launch_file=None, user_args=None):
     # If profile does not exist yet, auto-create its isolated structure on the fly!
     if target_profile not in profiles:
         prof_root = os.path.join(PROFILES_BASE_DIR, target_profile)
-        os.makedirs(os.path.join(prof_root, ".gemini"), exist_ok=True)
+        p_gem = os.path.join(prof_root, ".gemini")
+        os.makedirs(p_gem, exist_ok=True)
         os.makedirs(os.path.join(prof_root, "AppData", "Roaming", "Antigravity"), exist_ok=True)
         os.makedirs(os.path.join(prof_root, "AppData", "Local"), exist_ok=True)
+        p_cli = os.path.join(p_gem, "antigravity-cli")
+        c_cli = os.path.join(USER_HOME, ".gemini", "antigravity-cli")
+        if not is_ntfs_junction(p_cli) and not os.path.exists(p_cli):
+            create_directory_junction(p_cli, c_cli)
         print(f"\n{BOLD}{CYAN}[✓] Novo perfil isolado '{target_profile}' criado com sucesso em:{RESET} {prof_root}")
         print(f"{YELLOW}[!] Este perfil ainda não possui conta Google conectada.{RESET}")
         print(f"{BOLD}[i] Por favor, faça login com sua conta quando solicitado a seguir...{RESET}\n")
@@ -724,7 +729,7 @@ set "APPDATA=%PERFIL_ROOT%\\AppData\\Roaming"
 set "LOCALAPPDATA=%PERFIL_ROOT%\\AppData\\Local"
 set "GEMINI_HOME=%PERFIL_ROOT%"
 set "ANTIGRAVITY_GEMINI_DIR=%PERFIL_ROOT%\\.gemini"
-set "ANTIGRAVITY_APP_DATA_DIR=%PERFIL_ROOT%\\.gemini\\antigravity-cli"
+set "ANTIGRAVITY_APP_DATA_DIR=%AGY_ORIG_HOME%\\.gemini\\antigravity-cli"
 
 if not exist "%APPDATA%\\Antigravity" mkdir "%APPDATA%\\Antigravity" >nul 2>&1
 if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%" >nul 2>&1
@@ -751,8 +756,165 @@ if exist "%AGY_LAUNCH_FILE%" del "%AGY_LAUNCH_FILE%" >nul 2>&1
 endlocal
 """
 
+def is_ntfs_junction(path):
+    """Returns True if path exists and is an NTFS Directory Junction or reparse point."""
+    if not os.path.exists(path):
+        return False
+    try:
+        attrs = os.stat(path, follow_symlinks=False).st_file_attributes
+        return bool(attrs & 0x0400)
+    except Exception:
+        return False
+
+def create_directory_junction(junction_path, target_path):
+    """Creates a Windows NTFS Directory Junction without requiring admin privileges."""
+    cmd = f'cmd /c mklink /J "{junction_path}" "{target_path}"'
+    res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return res.returncode == 0
+
+def remove_directory_junction(junction_path):
+    """Safely unlinks an NTFS junction using Windows rmdir without deleting target directory contents."""
+    if is_ntfs_junction(junction_path):
+        cmd = f'cmd /c rmdir "{junction_path}"'
+        subprocess.run(cmd, shell=True, capture_output=True)
+        return True
+    return False
+
+def ensure_shared_sessions(dry_run=False):
+    """
+    Ensures unified session storage across all profiles.
+    Migrates conversation history, summaries DB, and brain assets from isolated profile(s)
+    to ~/.gemini/antigravity-cli and links each profile's antigravity-cli directory via NTFS Junction.
+    Keeps auth credentials (wincred.json, google_accounts.json, profile_identity.json) strictly isolated.
+    """
+    import sqlite3
+    central_dir = os.path.join(USER_HOME, ".gemini", "antigravity-cli")
+    c_convs = os.path.join(central_dir, "conversations")
+    c_brain = os.path.join(central_dir, "brain")
+    c_annot = os.path.join(central_dir, "annotations")
+    c_hist = os.path.join(central_dir, "history.jsonl")
+    c_db = os.path.join(central_dir, "conversation_summaries.db")
+
+    if not dry_run:
+        os.makedirs(c_convs, exist_ok=True)
+        os.makedirs(c_brain, exist_ok=True)
+        os.makedirs(c_annot, exist_ok=True)
+
+    profiles = discover_profiles()
+    for pname, prof in profiles.items():
+        if prof.get("root") == USER_HOME:
+            continue
+        p_gemini = prof.get("gemini_dir")
+        if not p_gemini:
+            continue
+        p_cli = os.path.join(p_gemini, "antigravity-cli")
+
+        if is_ntfs_junction(p_cli):
+            continue
+
+        if os.path.exists(p_cli):
+            p_db = os.path.join(p_cli, "conversation_summaries.db")
+            if os.path.exists(p_db) and os.path.getsize(p_db) > 0 and os.path.exists(c_db) and not dry_run:
+                try:
+                    conn = sqlite3.connect(c_db)
+                    cur = conn.cursor()
+                    cur.execute(f"ATTACH DATABASE '{p_db}' AS p_db")
+                    cur.execute("INSERT OR IGNORE INTO conversation_summaries SELECT * FROM p_db.conversation_summaries")
+                    try:
+                        cur.execute("INSERT OR IGNORE INTO conversations_fts SELECT * FROM p_db.conversations_fts")
+                    except Exception:
+                        pass
+                    try:
+                        cur.execute("INSERT OR IGNORE INTO conversation_parents SELECT * FROM p_db.conversation_parents")
+                    except Exception:
+                        pass
+                    conn.commit()
+                    cur.execute("DETACH DATABASE p_db")
+                    conn.close()
+                except Exception as e:
+                    print(f"{YELLOW}[!] Aviso ao mesclar banco de {pname}: {e}{RESET}")
+
+            # Copy conversations
+            p_convs = os.path.join(p_cli, "conversations")
+            if os.path.exists(p_convs) and not dry_run:
+                for f in os.listdir(p_convs):
+                    sf = os.path.join(p_convs, f)
+                    df = os.path.join(c_convs, f)
+                    if os.path.isfile(sf) and not os.path.exists(df):
+                        try:
+                            shutil.copy2(sf, df)
+                        except Exception:
+                            pass
+
+            # Copy brain
+            p_br = os.path.join(p_cli, "brain")
+            if os.path.exists(p_br) and not dry_run:
+                for item in os.listdir(p_br):
+                    si = os.path.join(p_br, item)
+                    di = os.path.join(c_brain, item)
+                    if os.path.isdir(si) and not os.path.exists(di):
+                        try:
+                            shutil.copytree(si, di)
+                        except Exception:
+                            pass
+
+            # Copy annotations
+            p_an = os.path.join(p_cli, "annotations")
+            if os.path.exists(p_an) and not dry_run:
+                for f in os.listdir(p_an):
+                    sf = os.path.join(p_an, f)
+                    df = os.path.join(c_annot, f)
+                    if os.path.isfile(sf) and not os.path.exists(df):
+                        try:
+                            shutil.copy2(sf, df)
+                        except Exception:
+                            pass
+
+            # Merge history
+            p_h = os.path.join(p_cli, "history.jsonl")
+            if os.path.exists(p_h) and not dry_run:
+                try:
+                    c_lines = set()
+                    if os.path.exists(c_hist):
+                        with open(c_hist, "r", encoding="utf-8", errors="ignore") as f:
+                            c_lines = set(f.read().splitlines())
+                    with open(p_h, "r", encoding="utf-8", errors="ignore") as f:
+                        new_lines = [l for l in f.read().splitlines() if l and l not in c_lines]
+                    if new_lines:
+                        with open(c_hist, "a", encoding="utf-8") as f:
+                            for l in new_lines:
+                                f.write(l + "\n")
+                except Exception:
+                    pass
+
+            # Backup and replace with junction
+            if not dry_run:
+                backup_path = os.path.join(p_gemini, "antigravity-cli.pre-shared-backup")
+                if os.path.exists(backup_path):
+                    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+                    backup_path = f"{backup_path}-{ts}"
+                try:
+                    shutil.move(p_cli, backup_path)
+                    create_directory_junction(p_cli, central_dir)
+                except Exception as e:
+                    print(f"{YELLOW}[!] Não foi possível criar junction para {pname}: {e}{RESET}")
+        else:
+            if not dry_run:
+                os.makedirs(p_gemini, exist_ok=True)
+                create_directory_junction(p_cli, central_dir)
+
+    return True
+
+def cmd_share_sessions():
+    print(f"\n{BOLD}{CYAN}=== UNIFICAÇÃO DE SESSÕES & HISTÓRICO CROSS-PROFILE ==={RESET}")
+    print(f"{GRAY}Centralizando conversations/, conversation_summaries.db e brain/ com junctions NTFS...{RESET}")
+    ensure_shared_sessions()
+    write_all_launchers()
+    print(f"{GREEN}[✓] Sessões unificadas com sucesso! Todos os perfis compartilham conversas e /resume.{RESET}\n")
+
 def write_all_launchers():
     """Regenerates canonical .cmd launchers for all profiles and removes stale .bat/agy.cmd in AGY_BIN_DIR."""
+    ensure_shared_sessions()
     profiles = discover_profiles()
     if not os.path.exists(AGY_BIN_DIR):
         print(f"{YELLOW}[!] Diretório de binários não encontrado: {AGY_BIN_DIR}{RESET}")
@@ -871,9 +1033,12 @@ def cmd_create(name, email=None):
     app_data = os.path.join(prof_dir, "AppData", "Roaming", "Antigravity")
     local_data = os.path.join(prof_dir, "AppData", "Local")
 
-    os.makedirs(cli_dir, exist_ok=True)
+    os.makedirs(gemini_dir, exist_ok=True)
     os.makedirs(app_data, exist_ok=True)
     os.makedirs(local_data, exist_ok=True)
+    c_app_data = os.path.join(USER_HOME, ".gemini", "antigravity-cli")
+    if not is_ntfs_junction(cli_dir) and not os.path.exists(cli_dir):
+        create_directory_junction(cli_dir, c_app_data)
 
     # Configure settings.json with custom statusline
     settings_file = os.path.join(cli_dir, "settings.json")
@@ -958,6 +1123,8 @@ def cmd_delete(target, force=False):
                     pass
 
     # 3. Remove diretório da raiz do perfil
+    p_cli = os.path.join(prof_root, ".gemini", "antigravity-cli")
+    remove_directory_junction(p_cli)
     if os.path.exists(prof_root):
         try:
             shutil.rmtree(prof_root, ignore_errors=True)
@@ -1993,6 +2160,8 @@ def main():
             print("Uso: agy-profile capture <perfil> [--yes]")
     elif subcmd == "launchers":
         write_all_launchers()
+    elif subcmd in ("share-sessions", "unify-sessions", "migrate-sessions"):
+        cmd_share_sessions()
     elif subcmd == "launch":
         action = sys.argv[2].lower() if len(sys.argv) > 2 else "show"
         arg1 = sys.argv[3] if len(sys.argv) > 3 else None

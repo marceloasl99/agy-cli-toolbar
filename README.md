@@ -98,12 +98,35 @@ Isolates individual Google accounts into dedicated sandboxes (`~/.agy-perfis/per
 | `agy-profile reset-auth <num\|id>` | Quarantines saved auth files for a profile so it prompts for a fresh login |
 | `agy-profile bind <perfil> <email>` | Manually binds a profile to an expected Google account email |
 | `agy-profile capture <perfil>` | Saves the currently active Windows session into the specified profile |
+| `agy-profile share-sessions` | Ensures unified conversation history & `/resume` junctions across all profiles |
 | `agy-profile launchers` | Regenerates canonical `agy1.cmd`..`agyN.cmd` launchers and cleans stale wrappers |
 | `agy-profile desktop <num\|id>` | Launches isolated **Antigravity Desktop** (`--user-data-dir`) for selected profile |
 | `agy-profile run <num\|id> [args]` | Runs `agy` CLI inside the sandboxed environment of the specified profile |
 | `agy-profile delete <num\|id>` | Safely deletes an extra profile and removes its launcher scripts |
 | `agy-profile tray` *(or `agy-tray`)* | Starts the Windows Tray & Floating Dashboard HUD |
 | `agy-profile autostart on\|off` | Toggles automatic silent launch on Windows startup |
+
+---
+
+### 🔄 Seamless Cross-Profile `/resume` & `--continue`
+
+You can start a project in **`agy2`**, run out of quota, and immediately switch to **`agy4`** (or any profile) to pick up **exactly where you left off**:
+
+```bash
+# Started work in perfil2:
+C:\Projects\myapp> agy2
+# (token / quota runs out; exit)
+
+# Seamlessly continue in perfil4:
+C:\Projects\myapp> agy4 -c
+# OR
+C:\Projects\myapp> agy4
+/resume
+```
+
+**How it works under the hood (Dual-Layer Shared Sessions):**
+- **Unified Sessions Storage:** `conversation_summaries.db`, `conversations/*.db`, `brain/`, and `history.jsonl` are shared via NTFS Directory Junctions (`mklink /J`) pointing to `%USER_HOME%\.gemini\antigravity-cli`.
+- **100% Strict Credential Isolation:** Authentication tokens (`wincred.json`, `google_accounts.json`, `profile_identity.json`) remain strictly private to each profile directory (`%PERFIL_ROOT%\.gemini\`), guaranteeing zero account cross-contamination while sharing project conversation state.
 
 ---
 
