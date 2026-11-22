@@ -5,8 +5,8 @@ bin_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.join(user_home, "A
 profiles_base = os.path.join(user_home, ".agy-perfis")
 
 files = {
-    "agy.cmd": ("perfil1", user_home),
-    "agy1.cmd": ("perfil1", user_home),
+    "agy.cmd": ("perfil1", os.path.join(profiles_base, "perfil1")),
+    "agy1.cmd": ("perfil1", os.path.join(profiles_base, "perfil1")),
     "agy2.cmd": ("perfil2", os.path.join(profiles_base, "perfil2")),
     "agy3.cmd": ("perfil3", os.path.join(profiles_base, "perfil3")),
     "agy4.cmd": ("perfil4", os.path.join(profiles_base, "perfil4")),
@@ -38,11 +38,11 @@ if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%" >nul 2>&1
 if not exist "%ANTIGRAVITY_GEMINI_DIR%" mkdir "%ANTIGRAVITY_GEMINI_DIR%" >nul 2>&1
 if not exist "%ANTIGRAVITY_APP_DATA_DIR%" mkdir "%ANTIGRAVITY_APP_DATA_DIR%" >nul 2>&1
 
-python "{custom_script}" pre-run {pname} >nul 2>&1
+python "{custom_script}" pre-run {pname}
 
 "%~dp0agy.exe" %*
 
-python "{custom_script}" post-run {pname} >nul 2>&1
+python "{custom_script}" post-run {pname}
 endlocal
 """
     try:

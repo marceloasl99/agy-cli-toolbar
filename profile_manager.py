@@ -414,9 +414,17 @@ def pre_run(target_profile):
     Safely captures current Windows Credential Manager token to its rightful profile,
     and loads target_profile's credentials into Windows Credential Manager.
     """
-    profiles = discover_profiles()
+    # If profile does not exist yet, auto-create its isolated structure on the fly!
     if target_profile not in profiles:
-        return False
+        prof_root = os.path.join(PROFILES_BASE_DIR, target_profile)
+        os.makedirs(os.path.join(prof_root, ".gemini"), exist_ok=True)
+        os.makedirs(os.path.join(prof_root, "AppData", "Roaming", "Antigravity"), exist_ok=True)
+        os.makedirs(os.path.join(prof_root, "AppData", "Local"), exist_ok=True)
+        print(f"\n{BOLD}{CYAN}[✓] Novo perfil isolado '{target_profile}' criado com sucesso em:{RESET} {prof_root}")
+        print(f"{YELLOW}[!] Este perfil ainda não possui conta Google conectada.{RESET}")
+        print(f"{BOLD}[i] Por favor, faça login com sua conta quando solicitado a seguir...{RESET}\n")
+        sync_profile_to_config_and_launchers(target_profile)
+        profiles = discover_profiles()
 
     # 1. Protect whatever is currently in Windows Credential Manager:
     # Only save to a profile if the email matches that profile's known email or active profile!
@@ -458,27 +466,34 @@ def pre_run(target_profile):
                 t_cred = json.load(f)
             if t_cred and t_cred.get("token") and t_cred.get("id_token_email"):
                 write_wincred(t_cred)
-                # Keep staging ~/.gemini in sync
-                staging_gemini = os.path.join(USER_HOME, ".gemini")
-                os.makedirs(staging_gemini, exist_ok=True)
-                with open(os.path.join(staging_gemini, "wincred.json"), "w", encoding="utf-8") as f:
-                    json.dump(t_cred, f, indent=2)
-                with open(os.path.join(staging_gemini, "google_accounts.json"), "w", encoding="utf-8") as f:
-                    json.dump({"active": t_cred.get("id_token_email"), "old": []}, f, indent=2)
+                # Keep staging ~/.gemini in sync ONLY if this is perfil1 (preserves total isolation)
+                if target_profile == "perfil1":
+                    staging_gemini = os.path.join(USER_HOME, ".gemini")
+                    os.makedirs(staging_gemini, exist_ok=True)
+                    with open(os.path.join(staging_gemini, "wincred.json"), "w", encoding="utf-8") as f:
+                        json.dump(t_cred, f, indent=2)
+                    with open(os.path.join(staging_gemini, "google_accounts.json"), "w", encoding="utf-8") as f:
+                        json.dump({"active": t_cred.get("id_token_email"), "old": []}, f, indent=2)
                 loaded = True
         except Exception:
             pass
 
     if not loaded:
-        # Profile is not yet authenticated or has no token (e.g. fresh perfil3)
+        # Profile is not yet authenticated or has no token (fresh profile)
         delete_wincred()
-        staging_gemini = os.path.join(USER_HOME, ".gemini")
-        staging_wincred = os.path.join(staging_gemini, "wincred.json")
-        if os.path.exists(staging_wincred):
-            try:
-                os.remove(staging_wincred)
-            except Exception:
-                pass
+        if target_profile == "perfil1":
+            staging_gemini = os.path.join(USER_HOME, ".gemini")
+            staging_wincred = os.path.join(staging_gemini, "wincred.json")
+            if os.path.exists(staging_wincred):
+                try:
+                    os.remove(staging_wincred)
+                except Exception:
+                    pass
+        print(f"\n{BOLD}{YELLOW}======================================================================{RESET}")
+        print(f"{BOLD}{YELLOW}⚠️  PERFIL '{target_profile.upper()}' SEM CONTA CONECTADA{RESET}")
+        print(f"    Nenhuma sessão salva encontrada para este perfil.")
+        print(f"{CYAN}    Faça login com a conta Google deste perfil para autenticar.{RESET}")
+        print(f"{BOLD}{YELLOW}======================================================================{RESET}\n")
 
     set_active_profile(target_profile)
     return True
@@ -575,18 +590,17 @@ def sync_profile_to_config_and_launchers(name, email=None):
             acc_email = f"{name}@gmail.com"
 
     # Create dedicated launcher scripts in AGY_BIN_DIR
+    custom_script_escaped = os.path.join(CUSTOM_DIR, "profile_manager.py").replace("\\", "\\\\")
     if os.path.exists(AGY_BIN_DIR):
-        cmd_names = [f"agy-{name}.cmd"]
+        # Only write canonical short-name launcher (e.g. agy5.cmd for agy5)
         if name.startswith("perfil") and name[6:].isdigit():
-            cmd_names.append(f"agy{name[6:]}.cmd")
-            cmd_names.append(f"agy-{name[6:]}.cmd")
+            cmd_names = [f"agy{name[6:]}.cmd"]
         elif name.startswith("agy") and name[3:].isdigit():
-            cmd_names.append(f"{name}.cmd")
-            cmd_names.append(f"agy-{name[3:]}.cmd")
+            cmd_names = [f"{name}.cmd"]
         elif name.isdigit():
-            cmd_names.append(f"agy{name}.cmd")
+            cmd_names = [f"agy{name}.cmd"]
         else:
-            cmd_names.append(f"{name}.cmd")
+            cmd_names = [f"{name}.cmd"]
 
         homepath = prof_dir[2:]
         cmd_content = f"""@echo off
@@ -608,7 +622,11 @@ if not exist "%LOCALAPPDATA%" mkdir "%LOCALAPPDATA%" >nul 2>&1
 if not exist "%ANTIGRAVITY_GEMINI_DIR%" mkdir "%ANTIGRAVITY_GEMINI_DIR%" >nul 2>&1
 if not exist "%ANTIGRAVITY_APP_DATA_DIR%" mkdir "%ANTIGRAVITY_APP_DATA_DIR%" >nul 2>&1
 
+python "{custom_script_escaped}" pre-run {name}
+
 "%~dp0agy.exe" %*
+
+python "{custom_script_escaped}" post-run {name}
 endlocal
 """
         for cname in cmd_names:

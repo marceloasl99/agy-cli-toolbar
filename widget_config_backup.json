@@ -1,0 +1,77 @@
+{
+  "x": 12,
+  "y": 15,
+  "width": 1336,
+  "height": 720,
+  "always_on_top": false,
+  "visible": true,
+  "locked": false,
+  "grid_preset": "2x2",
+  "columns": 2,
+  "refresh_seconds": 15,
+  "opacity": 0.96,
+  "theme": "Midnight OLED",
+  "privacy_mode": false,
+  "default_expanded": false,
+  "card_density": "detailed",
+  "alert_threshold": 85,
+  "show_free_pct": true,
+  "show_countdown": true,
+  "ui_scale": 1.25,
+  "font_size_offset": -1,
+  "enabled_profiles": {
+    "perfil1": true,
+    "perfil2": true,
+    "perfil3": true,
+    "perfil4": true,
+    "agy5": true,
+    "agy6": true
+  },
+  "profile_order": [
+    "perfil1",
+    "perfil2",
+    "perfil3",
+    "perfil4",
+    "agy5",
+    "agy6"
+  ],
+  "profile_nicknames": {},
+  "profile_positions": {},
+  "profile_models": {
+    "perfil1": [
+      "Gemini 3.8 Flash (High)",
+      "Claude Sonnet 4.6 (Thinking)",
+      "GPT-OSS 120B (Medium)"
+    ],
+    "perfil2": [
+      "Gemini 3.8 Flash (High)",
+      "Claude Sonnet 4.6 (Thinking)",
+      "GPT-OSS 120B (Medium)"
+    ],
+    "perfil3": [
+      "Gemini 3.8 Flash (High)",
+      "Claude Sonnet 4.6 (Thinking)",
+      "GPT-OSS 120B (Medium)"
+    ],
+    "perfil4": [
+      "Gemini 4 Argon (High)",
+      "Gemini 3.8 Flash (High)",
+      "Claude Sonnet 4.6 (Thinking)",
+      "GPT-OSS 120B (Medium)"
+    ],
+    "agy5": [
+      "Gemini 3.8 Flash (High)",
+      "Claude Sonnet 4.6 (Thinking)",
+      "GPT-OSS 120B (Medium)"
+    ],
+    "agy6": [
+      "Gemini 3.8 Flash (High)",
+      "Claude Sonnet 4.6 (Thinking)",
+      "GPT-OSS 120B (Medium)"
+    ]
+  },
+  "pro_profiles": {
+    "perfil4": true,
+    "perfil3": false
+  }
+}
