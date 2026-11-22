@@ -95,8 +95,10 @@ Aplicativo gráfico nativo para Windows (Tkinter + `pystray` + Win32 API) que ro
 * **Hover Tooltips Dinâmicos & Gaveta de Modelos:**
   * Ao passar o mouse sobre qualquer barra de cota, um balão flutuante exibe os valores atuais e a lista completa de modelos exatos daquele pool.
   * O botão individual **`▼ Detalhes`** no cartão (ou **`▼ Detalhes`** global no cabeçalho) expande/recolhe a gaveta com os modelos em cada cartão.
-* **Grade Rígida Simétrica & Presets Rápidos:** Uso de `uniform` grid no Tkinter garantindo que todos os cartões tenham exatamente o mesmo tamanho em qualquer layout (`1x1`, `2x2`, `1x4`, `4x1`, `2x3`, `3x2`, `3x3`, etc.), além de alça de redimensionamento livre (`◢`).
-* **Menu Rápido de Contexto (`⋮` ou Botão Direito):** Acesso imediato em qualquer cartão para abrir terminal CLI (`⚡ CLI (agyN)`), abrir app Desktop (`🖥️ Desktop`), ativar perfil, renomear apelido, alternar flag de Plano Pro (Argon) ou abrir a pasta do perfil.
+* **Auto-Fit Adaptativo & Clamp Rígido de Resolução:** A janela do dashboard **nunca** ultrapassa em pixels os limites do monitor (`screen_w` e `screen_h`), recalculando dinamicamente a escala de zoom e dimensões ideais com margem de segurança para a barra de tarefas. O botão **`⛶ Fit`** no cabeçalho e o preset **`Auto`** organizam e encaixam tudo automaticamente.
+* **Gestão e Exclusão Segura de Perfis:** Exclusão com 1-clique via interface gráfica (`🗑️ Excluir Perfil...` no menu do cartão ou no Centro de Configurações) ou via CLI (`agy-profile delete <nome>`), além do botão **`🎯 4 Perfis (2x2)`** para restaurar a grade 2x2 com facilidade a qualquer momento.
+* **Grade Rígida Simétrica & Presets Rápidos:** Uso de `uniform` grid no Tkinter garantindo que todos os cartões tenham exatamente o mesmo tamanho em qualquer layout (`Auto`, `2x2`, `3x2`, `1x4`, `4x1`, `2x3`, `1x2`, `2x1`, etc.), além de alça de redimensionamento livre (`◢`) com clamp de bordas.
+* **Menu Rápido de Contexto (`⋮` ou Botão Direito):** Acesso imediato em qualquer cartão para abrir terminal CLI (`⚡ CLI (agyN)`), abrir app Desktop (`🖥️ Desktop`), ativar perfil, alternar modo detalhado, ocultar perfil do dashboard, excluir permanentemente, renomear apelido ou abrir pasta do perfil.
 * **Personalização Completa:** 4 temas (`Dark Slate`, `Midnight OLED`, `Cyberpunk Neon`, `Emerald Tech`), ajuste de zoom (`75%–200%`), ajuste fino de fonte (`-1` a `+3`), controle de opacidade (`60%–100%`), Modo Privacidade (mascaramento de emails para gravações/streaming) e travamento de posição (`🔒 Fixado` / `🔓 Mover`).
 * **Bandeja do Sistema (`pystray`) & Instância Única:** Controle via ícone ao lado do relógio do Windows e trava com Win32 Named Mutex + Socket IPC (`127.0.0.1:49285`) para que o atalho na Área de Trabalho traga a janela aberta para primeiro plano sem criar duplicatas.
 
@@ -168,6 +170,16 @@ curl -fsSL https://raw.githubusercontent.com/marceloasl99/agy-cli-toolbar/main/i
 agy-tray
 ```
 *(Ou via `agy-profile tray` / atalho `Antigravity Quotas` na Área de Trabalho)*
+
+### Comandos Rápidos do CLI (`agy-profile`):
+```bash
+agy-profile list                   # Lista todos os perfis, cotas, modelos e status
+agy-profile switch <nome_ou_num>   # Alterna instantaneamente o perfil ativo
+agy-profile create <nome> [email]  # Cria um novo perfil isolado com launcher dedicado
+agy-profile delete <nome>          # Exclui um perfil e seus arquivos com segurança
+agy-profile auth <nome_ou_num>     # Inicia o fluxo de autenticação OAuth 2.0
+agy-profile desktop <nome_ou_num>  # Abre a IDE Antigravity Desktop no perfil selecionado
+```
 
 ---
 

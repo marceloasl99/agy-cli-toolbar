@@ -47,16 +47,17 @@ SINGLE_INSTANCE_PORT = 49285
 SINGLE_INSTANCE_MUTEX = "Local\\AntigravityQuotaMonitor_SingleInstanceMutex"
 
 GRID_PRESETS = {
-    "1x1": (1, 1),
-    "2x1": (2, 1),
-    "1x2": (1, 2),
+    "Auto": (2, 2),
     "2x2": (2, 2),
+    "3x2": (3, 2),
+    "1x4": (1, 4),
+    "4x1": (4, 1),
+    "2x3": (2, 3),
+    "1x2": (1, 2),
+    "2x1": (2, 1),
+    "1x1": (1, 1),
     "3x1": (3, 1),
     "1x3": (1, 3),
-    "2x3": (2, 3),
-    "3x2": (3, 2),
-    "4x1": (4, 1),
-    "1x4": (1, 4),
     "2x4": (2, 4),
     "4x2": (4, 2),
     "5x1": (5, 1),
@@ -350,9 +351,14 @@ class ResizeGrip(tk.Label):
     def on_motion(self, event):
         dx = event.x_root - self.start_x
         dy = event.y_root - self.start_y
-        new_w = max(self.start_w + dx, 340)
-        new_h = max(self.start_h + dy, 220)
-        self.target.geometry(f"{new_w}x{new_h}")
+        raw_w = self.start_w + dx
+        raw_h = self.start_h + dy
+        if hasattr(self.target, "clamp_geometry"):
+            w, h, _, _ = self.target.clamp_geometry(raw_w, raw_h)
+        else:
+            w = max(raw_w, 340)
+            h = max(raw_h, 220)
+        self.target.geometry(f"{w}x{h}")
 
     def on_release(self, event):
         self.target.config_data["width"] = self.target.winfo_width()
@@ -468,8 +474,8 @@ class SettingsDialog(tk.Toplevel):
         f_presets = tk.Frame(f, bg="#0f172a")
         f_presets.pack(fill="x", pady=6)
 
-        popular_presets = ["2x2", "1x4", "4x1", "1x2", "2x1", "2x3", "3x2", "1x1", "1x5", "3x3"]
-        self.preset_var = tk.StringVar(value=self.config_copy.get("grid_preset", "2x2"))
+        popular_presets = ["Auto", "2x2", "3x2", "1x4", "4x1", "2x3", "1x2", "2x1", "1x1", "3x3"]
+        self.preset_var = tk.StringVar(value=self.config_copy.get("grid_preset", "Auto"))
         self.preset_buttons = {}
 
         row_f = None
@@ -615,8 +621,10 @@ class SettingsDialog(tk.Toplevel):
         tk.Button(f_btns, text="▼ Descer", font=("Segoe UI", 8, "bold"), fg="#ffffff", bg="#334155", bd=0, padx=12, pady=3, cursor="hand2", command=self.move_prof_down).pack(fill="x", pady=2)
         tk.Button(f_btns, text="👁 Toggle Visível", font=("Segoe UI", 8, "bold"), fg="#38bdf8", bg="#0c4a6e", bd=0, padx=12, pady=3, cursor="hand2", command=self.toggle_prof_enable).pack(fill="x", pady=(6, 2))
         tk.Button(f_btns, text="🌟 Alternar Pro (Argon)", font=("Segoe UI", 8, "bold"), fg="#e9d5ff", bg="#581c87", bd=0, padx=12, pady=3, cursor="hand2", command=self.toggle_prof_pro).pack(fill="x", pady=2)
+        tk.Button(f_btns, text="🎯 4 Perfis (2x2)", font=("Segoe UI", 8, "bold"), fg="#a7f3d0", bg="#065f46", bd=0, padx=12, pady=3, cursor="hand2", command=self.reset_four_profiles).pack(fill="x", pady=2)
         tk.Button(f_btns, text="✏️ Renomear Apelido", font=("Segoe UI", 8), fg="#e2e8f0", bg="#1e293b", bd=0, padx=12, pady=3, cursor="hand2", command=self.rename_profile_nickname).pack(fill="x", pady=2)
         tk.Button(f_btns, text="📂 Abrir Pasta", font=("Segoe UI", 8), fg="#e2e8f0", bg="#1e293b", bd=0, padx=12, pady=3, cursor="hand2", command=self.open_selected_profile_folder).pack(fill="x", pady=2)
+        tk.Button(f_btns, text="🗑️ Excluir Perfil...", font=("Segoe UI", 8, "bold"), fg="#f87171", bg="#450a0a", bd=0, padx=12, pady=3, cursor="hand2", command=self.delete_selected_profile).pack(fill="x", pady=2)
         tk.Button(f_btns, text="➕ Novo Perfil...", font=("Segoe UI", 8, "bold"), fg="#a855f7", bg="#2e1065", bd=0, padx=12, pady=4, cursor="hand2", command=self.prompt_new_profile_dialog).pack(fill="x", pady=(8, 2))
 
         self.refresh_profile_listbox()
@@ -710,6 +718,29 @@ class SettingsDialog(tk.Toplevel):
     def prompt_new_profile_dialog(self):
         self.parent.prompt_new_profile()
         self.after(500, self.refresh_profile_listbox)
+
+    def reset_four_profiles(self):
+        if messagebox.askyesno("Restaurar 4 Perfis (2x2)", "Deseja ativar apenas os 4 perfis padrão (1 a 4) e ocultar os excedentes em grade 2x2?", parent=self):
+            self.parent.reset_to_standard_four_profiles()
+            self.destroy()
+
+    def delete_selected_profile(self):
+        sel = self.prof_listbox.curselection()
+        if not sel:
+            messagebox.showinfo("Selecionar Perfil", "Selecione um perfil na lista acima para excluir.", parent=self)
+            return
+        k = self.ordered_keys[sel[0]]
+        if k == "perfil1":
+            messagebox.showwarning("Aviso", "O perfil1 é o perfil principal do sistema e não pode ser excluído.", parent=self)
+            return
+        all_profiles = pm.discover_profiles()
+        pname = all_profiles.get(k, {}).get("display", k)
+        if messagebox.askyesno("Excluir Perfil", f"Tem certeza que deseja EXCLUIR permanentemente o perfil '{k}' ({pname})?\n\nTodos os dados, credenciais e arquivos deste perfil serão apagados.", parent=self):
+            pm.cmd_delete(k, force=True)
+            self.ordered_keys = [x for x in self.ordered_keys if x != k]
+            self.refresh_profile_listbox()
+            self.parent.refresh_profiles(force=True)
+            self.parent.auto_fit_layout()
 
     # ---------------- TAB: COTAS & ALERTAS ----------------
     def build_tab_quotas(self):
@@ -885,26 +916,32 @@ class SettingsDialog(tk.Toplevel):
         self.config_copy["font_size_offset"] = self.font_offset_var.get()
 
         preset = self.preset_var.get()
-        if preset in GRID_PRESETS:
+        if preset == "Auto":
+            self.config_copy["grid_preset"] = "Auto"
+            self.parent.config_data["grid_preset"] = "Auto"
+            self.parent.config_data["ui_scale"] = new_scale
+        elif preset in GRID_PRESETS:
             cols, rows = GRID_PRESETS[preset]
             self.parent.cols = cols
             self.config_copy["grid_preset"] = preset
             self.config_copy["columns"] = cols
 
-            # Calculate optimal window dimensions incorporating zoom scale
+            # Calculate optimal window dimensions incorporating zoom scale and strictly clamping to screen
             card_h = 310 if self.default_expanded_var.get() else 225
-            opt_w = min(max(int(round(cols * 350 * new_scale + 24)), 380), 2000)
-            opt_h = min(max(int(round(rows * card_h * new_scale + 85)), 220), 1400)
+            raw_w = int(round(cols * 350 * new_scale + 24))
+            raw_h = int(round(rows * card_h * new_scale + 85))
+            opt_w, opt_h, _, _ = self.parent.clamp_geometry(raw_w, raw_h)
             self.parent.geometry(f"{opt_w}x{opt_h}")
             self.config_copy["width"] = opt_w
             self.config_copy["height"] = opt_h
         elif new_scale != old_scale:
             ratio = new_scale / max(old_scale, 0.1)
-            new_w = max(int(round(self.parent.winfo_width() * ratio)), 360)
-            new_h = max(int(round(self.parent.winfo_height() * ratio)), 200)
-            self.parent.geometry(f"{new_w}x{new_h}")
-            self.config_copy["width"] = new_w
-            self.config_copy["height"] = new_h
+            raw_w = int(round(self.parent.winfo_width() * ratio))
+            raw_h = int(round(self.parent.winfo_height() * ratio))
+            opt_w, opt_h, _, _ = self.parent.clamp_geometry(raw_w, raw_h)
+            self.parent.geometry(f"{opt_w}x{opt_h}")
+            self.config_copy["width"] = opt_w
+            self.config_copy["height"] = opt_h
 
         self.config_copy["theme"] = self.theme_var.get()
         self.config_copy["refresh_seconds"] = self.ref_var.get()
@@ -967,18 +1004,12 @@ class DesktopWidget(tk.Tk):
         self.attributes("-topmost", self.config_data.get("always_on_top", True))
         self.attributes("-alpha", self.config_data.get("opacity", 0.96))
 
-        # Initial geometry
+        # Initial geometry clamped to screen bounds
         x = self.config_data.get("x", 120)
         y = self.config_data.get("y", 80)
         w = self.config_data.get("width", 680)
         h = self.config_data.get("height", 370)
-        # Ensure coordinates are within visible screen bounds
-        screen_w = self.winfo_screenwidth()
-        screen_h = self.winfo_screenheight()
-        if x < 20 or x + 150 > screen_w:
-            x = max((screen_w - w) // 2, 50)
-        if y < 20 or y + 150 > screen_h:
-            y = max((screen_h - h) // 2, 50)
+        w, h, x, y = self.clamp_geometry(w, h, x, y)
         self.geometry(f"{w}x{h}+{x}+{y}")
 
         self.theme_colors = THEMES.get(self.config_data.get("theme", "Dark Slate"), THEMES["Dark Slate"])
@@ -997,9 +1028,123 @@ class DesktopWidget(tk.Tk):
         self.lift()
         self.focus_force()
 
-        self.refresh_profiles(force=True)
+        if self.config_data.get("grid_preset") == "Auto":
+            self.auto_fit_layout()
+        else:
+            self.refresh_profiles(force=True)
         self.schedule_next_refresh()
         self.schedule_fast_quota_watch()
+
+    def clamp_geometry(self, w, h, x=None, y=None):
+        """Strictly ensures window never exceeds screen dimensions."""
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+
+        # Generous safety margins for taskbar and desktop window borders
+        max_w = max(screen_w - 40, 360)
+        max_h = max(screen_h - 70, 240)
+
+        w = min(max(int(round(w)), 340), max_w)
+        h = min(max(int(round(h)), 220), max_h)
+
+        if x is None:
+            x = self.winfo_x()
+        if y is None:
+            y = self.winfo_y()
+
+        x = max(10, min(x, screen_w - w - 10))
+        y = max(10, min(y, screen_h - h - 50))
+
+        return w, h, x, y
+
+    def auto_fit_layout(self, force_preset=None):
+        """Automatically arranges profiles to fit screen size perfectly without overflowing."""
+        active_keys, profiles = self.get_ordered_enabled_profiles()
+        n = len(active_keys)
+        preset = force_preset or self.config_data.get("grid_preset", "Auto")
+
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        max_w = max(screen_w - 40, 360)
+        max_h = max(screen_h - 70, 240)
+
+        if preset == "Auto":
+            if n <= 2:
+                cols = max(n, 1)
+                rows = 1
+            elif n in (3, 4):
+                cols = 2
+                rows = 2
+            elif n in (5, 6):
+                cols = 3 if screen_w >= 1360 else 2
+                rows = (n + cols - 1) // cols
+            elif n in (7, 8):
+                cols = 4 if screen_w >= 1600 else 3
+                rows = (n + cols - 1) // cols
+            else:
+                cols = 4 if screen_w >= 1600 else 3
+                rows = max((n + cols - 1) // cols, 1)
+        elif preset in GRID_PRESETS:
+            cols, rows = GRID_PRESETS[preset]
+            if cols * rows < n:
+                rows = (n + cols - 1) // cols
+        else:
+            cols, rows = 2, max((n + 1) // 2, 1)
+
+        self.cols = cols
+        self.config_data["columns"] = cols
+        if force_preset:
+            self.config_data["grid_preset"] = force_preset
+
+        # Adaptive auto-scaling to prevent window from exceeding screen
+        card_h = 310 if getattr(self, "all_expanded", False) else 225
+        cur_scale = float(self.config_data.get("ui_scale", 1.20))
+
+        needed_w = cols * 350 * cur_scale + 24
+        needed_h = rows * card_h * cur_scale + 85
+
+        if needed_w > max_w or needed_h > max_h:
+            scale_w = (max_w - 30) / (cols * 350.0)
+            scale_h = (max_h - 95) / (rows * float(card_h))
+            fit_scale = min(cur_scale, scale_w, scale_h)
+            fit_scale = max(round(fit_scale, 2), 0.70)
+            cur_scale = fit_scale
+            self.config_data["ui_scale"] = fit_scale
+            if hasattr(self, "zoom_lbl"):
+                self.zoom_lbl.config(text=f"{int(round(fit_scale * 100))}%")
+
+        opt_w = int(round(cols * 350 * cur_scale + 24))
+        opt_h = int(round(rows * card_h * cur_scale + 85))
+
+        w, h, x, y = self.clamp_geometry(opt_w, opt_h)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.config_data["width"] = w
+        self.config_data["height"] = h
+        self.config_data["x"] = x
+        self.config_data["y"] = y
+        save_widget_config(self.config_data)
+
+        if hasattr(self, "grid_btn"):
+            self.grid_btn.config(text=f"⊞ {self.config_data.get('grid_preset', 'Auto')}")
+
+        self.refresh_profiles(force=True)
+
+    def reset_to_standard_four_profiles(self):
+        """Immediately restores the standard 4-profile 2x2 layout."""
+        profiles = pm.discover_profiles()
+        en_dict = self.config_data.setdefault("enabled_profiles", {})
+
+        # Enable the standard 4 profiles, disable any others
+        for k in profiles.keys():
+            if k in ("perfil1", "perfil2", "perfil3", "perfil4"):
+                en_dict[k] = True
+            else:
+                en_dict[k] = False
+
+        self.config_data["grid_preset"] = "2x2"
+        self.config_data["columns"] = 2
+        save_widget_config(self.config_data)
+        self.auto_fit_layout("2x2")
 
     def get_theme(self):
         return THEMES.get(self.config_data.get("theme", "Dark Slate"), THEMES["Dark Slate"])
@@ -1021,15 +1166,16 @@ class DesktopWidget(tk.Tk):
         scale_val = round(max(0.70, min(scale_val, 2.50)), 2)
         self.config_data["ui_scale"] = scale_val
 
-        # Scale window geometry proportionally
+        # Scale window geometry proportionally and strictly clamp to screen
         ratio = scale_val / max(old_scale, 0.1)
         cur_w = self.winfo_width()
         cur_h = self.winfo_height()
-        new_w = max(int(round(cur_w * ratio)), 360)
-        new_h = max(int(round(cur_h * ratio)), 200)
-        self.geometry(f"{new_w}x{new_h}")
-        self.config_data["width"] = new_w
-        self.config_data["height"] = new_h
+        raw_w = max(int(round(cur_w * ratio)), 360)
+        raw_h = max(int(round(cur_h * ratio)), 200)
+        w, h, _, _ = self.clamp_geometry(raw_w, raw_h)
+        self.geometry(f"{w}x{h}")
+        self.config_data["width"] = w
+        self.config_data["height"] = h
         save_widget_config(self.config_data)
 
         if hasattr(self, "zoom_lbl"):
@@ -1054,7 +1200,9 @@ class DesktopWidget(tk.Tk):
         locked = self.config_data.get("locked", False)
         self.lock_btn.config(text="🔒 Fixado" if locked else "🔓 Mover", font=self.get_font(8, "bold"), fg=self.theme_colors["accent"] if locked else "#94a3b8")
         self.pin_btn.config(text="📌" if self.config_data.get("always_on_top", True) else "📍", font=self.get_font(9))
-        self.grid_btn.config(text=f"⊞ {self.config_data.get('grid_preset', '2x2')}", font=self.get_font(8, "bold"))
+        self.grid_btn.config(text=f"⊞ {self.config_data.get('grid_preset', 'Auto')}", font=self.get_font(8, "bold"))
+        if hasattr(self, "btn_fit"):
+            self.btn_fit.config(font=self.get_font(8, "bold"), fg=self.theme_colors["accent"])
 
         if hasattr(self, "zoom_lbl"):
             cur_pct = int(round(float(self.config_data.get("ui_scale", 1.20)) * 100))
@@ -1169,10 +1317,18 @@ class DesktopWidget(tk.Tk):
         self.lock_btn.pack(side="right", padx=4)
         self.lock_btn.bind("<Button-1>", lambda e: self.toggle_lock())
 
-        self.grid_btn = tk.Label(self.header, text=f"⊞ {self.config_data.get('grid_preset', '2x2')}", font=self.get_font(8, "bold"),
+        self.grid_btn = tk.Label(self.header, text=f"⊞ {self.config_data.get('grid_preset', 'Auto')}", font=self.get_font(8, "bold"),
                                  fg=self.theme_colors["accent"], bg=self.theme_colors["header_bg"], cursor="hand2")
         self.grid_btn.pack(side="right", padx=4)
         self.grid_btn.bind("<Button-1>", lambda e: self.quick_cycle_grid())
+        ToolTip(self.grid_btn, "Ciclar layout da grade (Auto, 2x2, 3x2, etc.)")
+
+        # Auto-Fit Button
+        self.btn_fit = tk.Label(self.header, text="⛶ Fit", font=self.get_font(8, "bold"),
+                                fg=self.theme_colors["accent"], bg=self.theme_colors["header_bg"], cursor="hand2")
+        self.btn_fit.pack(side="right", padx=3)
+        self.btn_fit.bind("<Button-1>", lambda e: self.auto_fit_layout())
+        ToolTip(self.btn_fit, "Auto-ajustar à tela: Encaixa janela e perfis perfeitamente sem estourar o monitor")
 
         # Quick Zoom Controls in Header: [-] 120% [+]
         self.zoom_frame = tk.Frame(self.header, bg=self.theme_colors["header_bg"])
@@ -1297,27 +1453,11 @@ class DesktopWidget(tk.Tk):
         SettingsDialog(self)
 
     def quick_cycle_grid(self):
-        cycle = ["2x2", "1x4", "4x1", "1x2", "2x1", "2x3", "3x2"]
-        cur = self.config_data.get("grid_preset", "2x2")
+        cycle = ["Auto", "2x2", "3x2", "1x4", "4x1", "2x3", "1x2", "2x1"]
+        cur = self.config_data.get("grid_preset", "Auto")
         next_idx = (cycle.index(cur) + 1) % len(cycle) if cur in cycle else 0
         new_preset = cycle[next_idx]
-
-        cols, rows = GRID_PRESETS[new_preset]
-        self.cols = cols
-        self.config_data["grid_preset"] = new_preset
-        self.config_data["columns"] = cols
-
-        scale = float(self.config_data.get("ui_scale", 1.20))
-        card_h = 310 if getattr(self, "all_expanded", False) else 225
-        opt_w = min(max(int(round(cols * 350 * scale + 24)), 380), 2000)
-        opt_h = min(max(int(round(rows * card_h * scale + 85)), 220), 1400)
-        self.geometry(f"{opt_w}x{opt_h}")
-        self.config_data["width"] = opt_w
-        self.config_data["height"] = opt_h
-        save_widget_config(self.config_data)
-
-        self.grid_btn.config(text=f"⊞ {new_preset}")
-        self.refresh_profiles(force=True)
+        self.auto_fit_layout(new_preset)
 
     def hide_widget(self):
         self.withdraw()
@@ -1453,12 +1593,38 @@ class DesktopWidget(tk.Tk):
             command=lambda: self.toggle_profile_pro_inline(profile_key)
         )
         menu.add_separator()
+        menu.add_command(
+            label="👁 Ocultar deste Dashboard",
+            command=lambda: self.hide_profile_inline(profile_key)
+        )
+        if profile_key != "perfil1":
+            menu.add_command(
+                label="🗑️ Excluir Perfil...",
+                command=lambda: self.delete_profile_inline(profile_key)
+            )
+        menu.add_separator()
         if prof.get("root"):
             menu.add_command(label="📁 Abrir Pasta do Perfil", command=lambda: open_folder(prof["root"]))
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
             menu.grab_release()
+
+    def hide_profile_inline(self, profile_key):
+        en_dict = self.config_data.setdefault("enabled_profiles", {})
+        en_dict[profile_key] = False
+        save_widget_config(self.config_data)
+        self.auto_fit_layout()
+
+    def delete_profile_inline(self, profile_key):
+        if profile_key == "perfil1":
+            messagebox.showwarning("Aviso", "O perfil1 é o perfil principal do sistema e não pode ser excluído.", parent=self)
+            return
+        profiles = pm.discover_profiles()
+        pname = profiles.get(profile_key, {}).get("display", profile_key)
+        if messagebox.askyesno("Excluir Perfil", f"Tem certeza que deseja EXCLUIR permanentemente o perfil '{profile_key}' ({pname})?\n\nTodos os dados e arquivos deste perfil serão apagados.", parent=self):
+            pm.cmd_delete(profile_key, force=True)
+            self.auto_fit_layout()
 
     def rename_profile_inline(self, profile_key):
         nicknames = self.config_data.setdefault("profile_nicknames", {})
@@ -1972,7 +2138,7 @@ class DesktopWidget(tk.Tk):
             if nome:
                 pm.cmd_create(nome, email if email else None)
                 win.destroy()
-                self.refresh_profiles(force=True)
+                self.auto_fit_layout()
                 if self.tray:
                     self.tray.update_tray_menu()
 
@@ -2096,9 +2262,29 @@ class TrayApp:
                     try:
                         conn, _ = server_sock.accept()
                         data = conn.recv(1024).decode('utf-8', errors='ignore').strip()
-                        if "SHOW" in data:
+                        if "STATUS" in data:
+                            st = {
+                                "width": self.widget.winfo_width(),
+                                "height": self.widget.winfo_height(),
+                                "screen_w": self.widget.winfo_screenwidth(),
+                                "screen_h": self.widget.winfo_screenheight(),
+                                "cards": list(self.widget.card_views.keys()),
+                                "preset": self.widget.config_data.get("grid_preset"),
+                                "cols": self.widget.cols,
+                                "ui_scale": self.widget.config_data.get("ui_scale")
+                            }
+                            conn.sendall((json.dumps(st) + "\n").encode("utf-8"))
+                        elif "RESET4" in data:
+                            self.widget.after(0, self.widget.reset_to_standard_four_profiles)
+                            conn.sendall(b"RESET4_OK\n")
+                        elif "AUTOFIT" in data:
+                            self.widget.after(0, self.widget.auto_fit_layout)
+                            conn.sendall(b"AUTOFIT_OK\n")
+                        elif "SHOW" in data:
                             self.widget.after(0, self.widget.bring_to_front)
-                        conn.sendall(b"OK\n")
+                            conn.sendall(b"OK\n")
+                        else:
+                            conn.sendall(b"OK\n")
                         conn.close()
                     except Exception:
                         break

@@ -149,22 +149,40 @@ def discover_profiles():
         }
 
     if os.path.exists(PROFILES_BASE_DIR):
-        for item in sorted(os.listdir(PROFILES_BASE_DIR)):
-            if item == "perfil1":
+        numbered_profiles = []
+        custom_profiles = []
+        for item in os.listdir(PROFILES_BASE_DIR):
+            if item == "perfil1" or item.startswith(".") or item.startswith("__"):
                 continue
             full_path = os.path.join(PROFILES_BASE_DIR, item)
             if os.path.isdir(full_path):
-                if not item.startswith("perfil"):
-                    continue
-                num_part = item[6:]
-                disp = f"Perfil {num_part}" if num_part.isdigit() else item.capitalize()
-                profiles[item] = {
-                    "name": item,
-                    "display": disp,
-                    "root": full_path,
-                    "gemini_dir": os.path.join(full_path, ".gemini"),
-                    "is_default": False
-                }
+                if item.startswith("perfil") and item[6:].isdigit():
+                    numbered_profiles.append((int(item[6:]), item, full_path))
+                elif item.isdigit():
+                    numbered_profiles.append((int(item), item, full_path))
+                else:
+                    custom_profiles.append((item, full_path))
+
+        # Adiciona primeiro os numerados padrão em ordem crescente (perfil2, perfil3, perfil4...)
+        for num, item, full_path in sorted(numbered_profiles, key=lambda x: x[0]):
+            disp = f"Perfil {num}"
+            profiles[item] = {
+                "name": item,
+                "display": disp,
+                "root": full_path,
+                "gemini_dir": os.path.join(full_path, ".gemini"),
+                "is_default": False
+            }
+
+        # Depois adiciona os perfis adicionais/customizados em ordem alfabética
+        for item, full_path in sorted(custom_profiles, key=lambda x: x[0].lower()):
+            profiles[item] = {
+                "name": item,
+                "display": item,
+                "root": full_path,
+                "gemini_dir": os.path.join(full_path, ".gemini"),
+                "is_default": False
+            }
     return profiles
 
 # Antigravity Model Groups & Quota Families (exact models from `agy models`)
@@ -621,6 +639,104 @@ endlocal
     print(f"  {CYAN}agy-profile auth {name}{RESET}\n")
     return True
 
+def cmd_delete(target, force=False):
+    profiles = discover_profiles()
+    chosen_key = None
+    if target.isdigit():
+        idx = int(target)
+        keys = list(profiles.keys())
+        if 1 <= idx <= len(keys):
+            chosen_key = keys[idx - 1]
+    else:
+        for k in profiles.keys():
+            if k.lower() == target.lower():
+                chosen_key = k
+                break
+
+    if not chosen_key:
+        print(f"{RED}[!] Perfil '{target}' não encontrado.{RESET}")
+        return False
+
+    if chosen_key == "perfil1":
+        print(f"{RED}[!] O perfil 'perfil1' é o perfil principal do sistema e não pode ser excluído.{RESET}")
+        return False
+
+    prof = profiles[chosen_key]
+    prof_root = prof["root"]
+
+    if not force:
+        confirm = input(f"Tem certeza que deseja EXCLUIR permanentemente o perfil '{chosen_key}' ({prof['display']})? [s/N]: ").strip().lower()
+        if confirm not in ("s", "sim", "y", "yes"):
+            print("Operação cancelada.")
+            return False
+
+    # 1. Se for o perfil ativo, chaveia de volta para perfil1
+    if get_active_profile() == chosen_key:
+        print(f"{YELLOW}[*] O perfil '{chosen_key}' está ativo no momento. Alternando de volta para perfil1...{RESET}")
+        cmd_switch("perfil1")
+
+    # 2. Exclui arquivos .cmd no AGY_BIN_DIR
+    if os.path.exists(AGY_BIN_DIR):
+        cmd_candidates = [f"agy-{chosen_key}.cmd", f"agy-{chosen_key.lower()}.cmd"]
+        if chosen_key.startswith("perfil") and chosen_key[6:].isdigit():
+            cmd_candidates.append(f"agy{chosen_key[6:]}.cmd")
+        elif chosen_key.isdigit():
+            cmd_candidates.append(f"agy{chosen_key}.cmd")
+        for cname in cmd_candidates:
+            cpath = os.path.join(AGY_BIN_DIR, cname)
+            if os.path.exists(cpath):
+                try:
+                    os.remove(cpath)
+                except Exception:
+                    pass
+
+    # 3. Remove diretório da raiz do perfil
+    if os.path.exists(prof_root):
+        try:
+            shutil.rmtree(prof_root, ignore_errors=True)
+        except Exception as e:
+            print(f"{RED}[!] Erro ao remover diretório '{prof_root}': {e}{RESET}")
+
+    # 4. Remove de widget_config.json
+    widget_cfg_file = os.path.join(CUSTOM_DIR, "widget_config.json")
+    if os.path.exists(widget_cfg_file):
+        try:
+            with open(widget_cfg_file, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            order = cfg.get("profile_order", [])
+            if chosen_key in order:
+                order.remove(chosen_key)
+                cfg["profile_order"] = order
+            if "enabled_profiles" in cfg:
+                cfg["enabled_profiles"].pop(chosen_key, None)
+            if "profile_nicknames" in cfg:
+                cfg["profile_nicknames"].pop(chosen_key, None)
+            if "profile_positions" in cfg:
+                cfg["profile_positions"].pop(chosen_key, None)
+            if "profile_models" in cfg:
+                cfg["profile_models"].pop(chosen_key, None)
+            if "pro_profiles" in cfg:
+                cfg["pro_profiles"].pop(chosen_key, None)
+            with open(widget_cfg_file, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=2)
+        except Exception:
+            pass
+
+    # 5. Remove de profiles_quotas.json
+    if os.path.exists(QUOTAS_CACHE_FILE):
+        try:
+            with open(QUOTAS_CACHE_FILE, "r", encoding="utf-8") as f:
+                qdata = json.load(f)
+            if chosen_key in qdata:
+                qdata.pop(chosen_key, None)
+                with open(QUOTAS_CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(qdata, f, indent=2)
+        except Exception:
+            pass
+
+    print(f"\n{BOLD}{GREEN}[✓] Perfil '{chosen_key}' excluído com sucesso!{RESET}")
+    return True
+
 def cmd_auth(target):
     profiles = discover_profiles()
     chosen_key = None
@@ -802,9 +918,10 @@ def interactive_menu():
         print(" [6] ⚡ Executar agy CLI no perfil")
         print(" [7] 📊 Iniciar Tray & Widget no Desktop")
         print(" [8] 🚀 Ativar/Desativar Inicialização com o Windows")
+        print(" [9] 🗑️  Excluir perfil (remover permanentemente)")
         print(" [0] ❌ Sair\n")
 
-        choice = input("Escolha uma opção [0-8]: ").strip()
+        choice = input("Escolha uma opção [0-9]: ").strip()
         if choice == "1":
             cmd_list()
         elif choice == "2":
@@ -837,6 +954,11 @@ def interactive_menu():
         elif choice == "8":
             sub_c = input("Ativar inicialização automática com o Windows? [s/n]: ").strip().lower()
             cmd_autostart(sub_c in ("s", "sim", "y", "yes", "1"))
+        elif choice == "9":
+            cmd_list()
+            target = input("Número ou nome do perfil para EXCLUIR: ").strip()
+            if target:
+                cmd_delete(target)
         elif choice == "0":
             break
         else:
@@ -874,6 +996,14 @@ def main():
             email = input("Email (opcional): ").strip()
             if nome:
                 cmd_create(nome, email if email else None)
+    elif subcmd in ("delete", "remove", "del", "rm"):
+        if len(sys.argv) > 2:
+            cmd_delete(sys.argv[2], force=False)
+        else:
+            cmd_list()
+            target = input("Número ou nome do perfil para EXCLUIR: ").strip()
+            if target:
+                cmd_delete(target)
     elif subcmd in ("auth", "login"):
         if len(sys.argv) > 2:
             cmd_auth(sys.argv[2])
@@ -899,7 +1029,7 @@ def main():
         cmd_autostart(enable)
     else:
         print(f"Comando desconhecido: {subcmd}")
-        print("Comandos disponíveis: list, switch, create, auth, desktop, run, tray, autostart")
+        print("Comandos disponíveis: list, switch, create, delete, auth, desktop, run, tray, autostart")
 
 if __name__ == "__main__":
     main()
